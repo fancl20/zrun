@@ -28,6 +28,7 @@ fn make_parent_mount_private(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !v
 fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
     try make_parent_mount_private(alloc, rootfs);
     try utils.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
+    try utils.mount(null, rootfs, null, std.os.linux.MS_PRIVATE, null);
 }
 
 fn update_mount_flags(current_flags: u32, name: []const u8) ?u32 {
@@ -109,4 +110,7 @@ pub fn setup(alloc: *std.mem.Allocator, spec: *const runtime_spec.Spec) !void {
     try prepare(alloc, rootfs);
     try do_mounts(alloc, rootfs, spec.mounts);
     try move_chroot(rootfs);
+    if (spec.root.readonly) {
+        try utils.mount(null, "/", null, std.os.linux.MS_REMOUNT | std.os.linux.MS_BIND | std.os.linux.MS_RDONLY, null);
+    }
 }
