@@ -14,5 +14,5 @@ pub fn execute(alloc: *std.mem.Allocator, spec: *const runtime_spec.Spec) !void 
         const pos = std.mem.indexOf(u8, env, "=").?;
         try envs.set(env[0..pos], env[pos + 1 ..]);
     }
-    return std.os.execvpe(&arena.allocator, spec.process.args, &envs);
+    return std.process.execve(&arena.allocator, spec.process.args, &envs);
 }
