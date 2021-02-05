@@ -3,11 +3,9 @@ const container = @import("container.zig");
 const utils = @import("utils.zig");
 const runtime_spec = @import("runtime_spec.zig");
 
-fn changeRootfs(c: *container.Container) void {}
-
 const NamespaceMountError = error{MountParentPrivateFailed};
 
-fn make_parent_mount_private(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
+fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
@@ -26,12 +24,12 @@ fn make_parent_mount_private(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !v
 }
 
 fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
-    try make_parent_mount_private(alloc, rootfs);
+    try makeParentMountPrivate(alloc, rootfs);
     try utils.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
     try utils.mount(null, rootfs, null, std.os.linux.MS_PRIVATE, null);
 }
 
-fn update_mount_flags(current_flags: u32, name: []const u8) ?u32 {
+fn updateMountFlags(current_flags: u32, name: []const u8) ?u32 {
     if (std.mem.eql(u8, name, "bind")) return current_flags | std.os.linux.MS_BIND;
     if (std.mem.eql(u8, name, "rbind")) return current_flags | std.os.linux.MS_REC | std.os.linux.MS_BIND;
     if (std.mem.eql(u8, name, "ro")) return current_flags | std.os.linux.MS_RDONLY;
@@ -67,7 +65,7 @@ fn update_mount_flags(current_flags: u32, name: []const u8) ?u32 {
     return null;
 }
 
-fn do_mounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_spec.Mount) !void {
+fn doMounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_spec.Mount) !void {
     for (mounts) |m| {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
@@ -75,7 +73,7 @@ fn do_mounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_
         var flags: u32 = 0;
         var opts = try std.ArrayList([]const u8).initCapacity(&arena.allocator, m.options.len);
         for (m.options) |opt| {
-            if (update_mount_flags(flags, opt)) |new_flags| {
+            if (updateMountFlags(flags, opt)) |new_flags| {
                 flags = new_flags;
             } else {
                 opts.appendAssumeCapacity(opt);
@@ -88,13 +86,45 @@ fn do_mounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_
             try arena.allocator.dupeZ(u8, dest),
             try arena.allocator.dupeZ(u8, m.type),
             flags,
-            // TODO: Remove if after joinZ working correctly when slice is empty.
-            if (opts.items.len == 0) null else @ptrCast(*u8, try std.mem.joinZ(&arena.allocator, ",", opts.items)),
+            @ptrCast(*u8, try std.mem.joinZ(&arena.allocator, ",", opts.items)),
         );
     }
 }
 
-fn move_chroot(rootfs: [:0]const u8) !void {
+const DeviceCreateError = error{InvalidDeviceType};
+
+const DeviceType = enum(u8) {
+    BlockDevice = 'b',
+    CharDevice = 'c',
+    FifoDevice = 'p',
+    _,
+};
+
+fn getDeviceFileModeFromType(device_type: []u8) DeviceCreateError!u32 {
+    if (device_type.len != 1) {
+        return error.InvalidDeviceType;
+    }
+    return switch (@intToEnum(DeviceType, device_type[0])) {
+        .BlockDevice => std.os.linux.S_IFBLK,
+        .CharDevice => std.os.linux.S_IFCHR,
+        .FifoDevice => std.os.linux.S_IFIFO,
+        _ => error.InvalidDeviceType,
+    };
+}
+
+fn createDevices(alloc: *std.mem.Allocator, rootfs: [:0]const u8, devices: []runtime_spec.LinuxDevice) !void {
+    for (devices) |d| {
+        var arena = std.heap.ArenaAllocator.init(alloc);
+        defer arena.deinit();
+
+        const dest = try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, d.path });
+        const file_mode: std.os.linux.mode_t = d.fileMode | try getDeviceFileModeFromType(d.type);
+        const dev = utils.mkdev(d.major, d.minor);
+        try utils.mknod(try arena.allocator.dupeZ(u8, dest), file_mode, dev);
+    }
+}
+
+fn moveChroot(rootfs: [:0]const u8) !void {
     try std.os.chdir(rootfs);
     try utils.mount(rootfs, "/", null, std.os.linux.MS_MOVE, null);
     try utils.chroot(".");
@@ -108,8 +138,9 @@ pub fn setup(alloc: *std.mem.Allocator, spec: *const runtime_spec.Spec) !void {
     const rootfs = try utils.realpathAllocZ(&arena.allocator, spec.root.path);
 
     try prepare(alloc, rootfs);
-    try do_mounts(alloc, rootfs, spec.mounts);
-    try move_chroot(rootfs);
+    try doMounts(alloc, rootfs, spec.mounts);
+    try createDevices(alloc, rootfs, spec.linux.devices);
+    try moveChroot(rootfs);
     if (spec.root.readonly) {
         try utils.mount(null, "/", null, std.os.linux.MS_REMOUNT | std.os.linux.MS_BIND | std.os.linux.MS_RDONLY, null);
     }

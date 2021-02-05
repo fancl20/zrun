@@ -7,15 +7,15 @@ const UnshareError = error{
 } || std.os.UnexpectedError;
 
 pub fn unshare(flags: usize) UnshareError!void {
-    switch (std.os.errno(std.os.linux.syscall1(.unshare, flags))) {
-        0 => return,
-        std.os.linux.EINVAL => return error.InvalidExe,
-        std.os.linux.ENOMEM => return error.SystemResources,
-        std.os.linux.ENOSPC => return error.SystemResources,
-        std.os.linux.EPERM => return error.AccessDenied,
-        std.os.linux.EUSERS => return error.SystemResources,
-        else => |err| return std.os.unexpectedErrno(err),
-    }
+    return switch (std.os.errno(std.os.linux.syscall1(.unshare, flags))) {
+        0 => {},
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.ENOSPC => error.SystemResources,
+        std.os.linux.EPERM => error.AccessDenied,
+        std.os.linux.EUSERS => error.SystemResources,
+        else => |err| std.os.unexpectedErrno(err),
+    };
 }
 
 const MountError = error{
@@ -32,25 +32,25 @@ const MountError = error{
 } || std.os.UnexpectedError;
 
 pub fn mount(special: ?[*:0]const u8, dir: [*:0]const u8, fstype: ?[*:0]const u8, flags: u32, data: ?*u8) MountError!void {
-    switch (std.os.errno(std.os.linux.syscall5(.mount, @ptrToInt(special), @ptrToInt(dir), @ptrToInt(fstype), flags, @ptrToInt(data)))) {
-        0 => return,
-        std.os.linux.EACCES => return error.AccessDenied,
-        std.os.linux.EBUSY => return error.DeviceBusy,
+    return switch (std.os.errno(std.os.linux.syscall5(.mount, @ptrToInt(special), @ptrToInt(dir), @ptrToInt(fstype), flags, @ptrToInt(data)))) {
+        0 => {},
+        std.os.linux.EACCES => error.AccessDenied,
+        std.os.linux.EBUSY => error.DeviceBusy,
         std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => return error.InvalidExe,
-        std.os.linux.ELOOP => return error.FileSystem,
-        std.os.linux.EMFILE => return error.SystemResources,
-        std.os.linux.ENAMETOOLONG => return error.NameTooLong,
-        std.os.linux.ENODEV => return error.SystemResources,
-        std.os.linux.ENOENT => return error.FileNotFound,
-        std.os.linux.ENOMEM => return error.SystemResources,
-        std.os.linux.ENOTBLK => return error.NotBlockDevice,
-        std.os.linux.ENOTDIR => return error.NotDir,
-        std.os.linux.ENXIO => return error.InvalidExe,
-        std.os.linux.EPERM => return error.AccessDenied,
-        std.os.linux.EROFS => return error.ReadOnlyFileSystem,
-        else => |err| return std.os.unexpectedErrno(err),
-    }
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ELOOP => error.FileSystem,
+        std.os.linux.EMFILE => error.SystemResources,
+        std.os.linux.ENAMETOOLONG => error.NameTooLong,
+        std.os.linux.ENODEV => error.SystemResources,
+        std.os.linux.ENOENT => error.FileNotFound,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.ENOTBLK => error.NotBlockDevice,
+        std.os.linux.ENOTDIR => error.NotDir,
+        std.os.linux.ENXIO => error.InvalidExe,
+        std.os.linux.EPERM => error.AccessDenied,
+        std.os.linux.EROFS => error.ReadOnlyFileSystem,
+        else => |err| std.os.unexpectedErrno(err),
+    };
 }
 
 const UmountError = error{
@@ -64,18 +64,50 @@ const UmountError = error{
 } || std.os.UnexpectedError;
 
 pub fn umount2(special: [*:0]const u8, flags: u32) UmountError!void {
-    switch (std.os.errno(std.os.linux.syscall2(.umount2, @ptrToInt(special), flags))) {
-        0 => return,
-        std.os.linux.EAGAIN => return error.WouldBlock,
-        std.os.linux.EBUSY => return error.DeviceBusy,
+    return switch (std.os.errno(std.os.linux.syscall2(.umount2, @ptrToInt(special), flags))) {
+        0 => {},
+        std.os.linux.EAGAIN => error.WouldBlock,
+        std.os.linux.EBUSY => error.DeviceBusy,
         std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => return error.InvalidExe,
-        std.os.linux.ENAMETOOLONG => return error.NameTooLong,
-        std.os.linux.ENOENT => return error.FileNotFound,
-        std.os.linux.ENOMEM => return error.SystemResources,
-        std.os.linux.EPERM => return error.AccessDenied,
-        else => |err| return std.os.unexpectedErrno(err),
-    }
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ENAMETOOLONG => error.NameTooLong,
+        std.os.linux.ENOENT => error.FileNotFound,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.EPERM => error.AccessDenied,
+        else => |err| std.os.unexpectedErrno(err),
+    };
+}
+
+const MknodError = error{
+    AccessDenied,
+    DiskQuota,
+    PathAlreadyExists,
+    InvalidExe,
+    FileSystem,
+    NameTooLong,
+    FileNotFound,
+    SystemResources,
+    NoSpaceLeft,
+    NotDir,
+} || std.os.UnexpectedError;
+
+pub fn mknod(pathname: [*:0]const u8, mode: std.os.linux.mode_t, dev: std.os.linux.dev_t) MknodError!void {
+    return switch (std.os.errno(std.os.linux.syscall3(.mknod, @ptrToInt(pathname), mode, dev))) {
+        0 => {},
+        std.os.linux.EACCES => error.AccessDenied,
+        std.os.linux.EDQUOT => error.DiskQuota,
+        std.os.linux.EEXIST => error.PathAlreadyExists,
+        std.os.linux.EFAULT => unreachable,
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ELOOP => error.FileSystem,
+        std.os.linux.ENAMETOOLONG => error.NameTooLong,
+        std.os.linux.ENOENT => error.FileNotFound,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.ENOSPC => error.NoSpaceLeft,
+        std.os.linux.ENOTDIR => error.NotDir,
+        std.os.linux.EPERM => error.AccessDenied,
+        else => |err| std.os.unexpectedErrno(err),
+    };
 }
 
 const ChrootError = error{
@@ -87,20 +119,20 @@ const ChrootError = error{
     NotDir,
 } || std.os.UnexpectedError;
 
-pub fn chroot(path: [*:0]const u8) ChrootError!void {
-    switch (std.os.errno(std.os.linux.syscall1(.chroot, @ptrToInt(path)))) {
-        0 => return,
-        std.os.linux.EACCES => return error.AccessDenied,
+pub fn chroot(pathname: [*:0]const u8) ChrootError!void {
+    return switch (std.os.errno(std.os.linux.syscall1(.chroot, @ptrToInt(pathname)))) {
+        0 => {},
+        std.os.linux.EACCES => error.AccessDenied,
         std.os.linux.EFAULT => unreachable,
-        std.os.linux.EIO => return error.FileSystem,
-        std.os.linux.ELOOP => return error.FileSystem,
-        std.os.linux.ENAMETOOLONG => return error.NameTooLong,
-        std.os.linux.ENOENT => return error.FileNotFound,
-        std.os.linux.ENOMEM => return error.SystemResources,
-        std.os.linux.ENOTDIR => return error.NotDir,
-        std.os.linux.EPERM => return error.AccessDenied,
-        else => |err| return std.os.unexpectedErrno(err),
-    }
+        std.os.linux.EIO => error.FileSystem,
+        std.os.linux.ELOOP => error.FileSystem,
+        std.os.linux.ENAMETOOLONG => error.NameTooLong,
+        std.os.linux.ENOENT => error.FileNotFound,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.ENOTDIR => error.NotDir,
+        std.os.linux.EPERM => error.AccessDenied,
+        else => |err| std.os.unexpectedErrno(err),
+    };
 }
 
 const SetHostnameError = error{
@@ -109,15 +141,24 @@ const SetHostnameError = error{
     AccessDenied,
 } || std.os.UnexpectedError;
 
-pub fn sethostname(name: []const u8) !void {
-    switch (std.os.errno(std.os.linux.syscall2(.sethostname, @ptrToInt(name.ptr), name.len))) {
-        0 => return,
+pub fn sethostname(name: []const u8) SetHostnameError!void {
+    return switch (std.os.errno(std.os.linux.syscall2(.sethostname, @ptrToInt(name.ptr), name.len))) {
+        0 => {},
         std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => return error.InvalidExe,
-        std.os.linux.ENAMETOOLONG => return error.NameTooLong,
-        std.os.linux.EPERM => return error.AccessDenied,
-        else => |err| return std.os.unexpectedErrno(err),
-    }
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ENAMETOOLONG => error.NameTooLong,
+        std.os.linux.EPERM => error.AccessDenied,
+        else => |err| std.os.unexpectedErrno(err),
+    };
+}
+
+pub fn mkdev(major: u64, minor: u64) std.os.linux.dev_t {
+    var dev: std.os.linux.dev_t = 0;
+    dev |= (major & 0x00000fff) << 8;
+    dev |= (major & 0xfffff000) << 32;
+    dev |= (minor & 0x000000ff) << 0;
+    dev |= (minor & 0xffffff00) << 12;
+    return dev;
 }
 
 pub fn realpathAllocZ(alloc: *std.mem.Allocator, pathname: []const u8) ![:0]u8 {
