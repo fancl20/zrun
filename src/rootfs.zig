@@ -117,10 +117,12 @@ fn createDevices(alloc: *std.mem.Allocator, rootfs: [:0]const u8, devices: []run
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
 
-        const dest = try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, d.path });
+        // TODO: Use fs.path.joinZ instead
+        const dest = try arena.allocator.dupeZ(u8, try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, d.path }));
         const file_mode: std.os.linux.mode_t = d.fileMode | try getDeviceFileModeFromType(d.type);
         const dev = utils.mkdev(d.major, d.minor);
-        try utils.mknod(try arena.allocator.dupeZ(u8, dest), file_mode, dev);
+        try utils.mknod(dest, file_mode, dev);
+        try utils.chown(dest, d.uid, d.gid);
     }
 }
 
