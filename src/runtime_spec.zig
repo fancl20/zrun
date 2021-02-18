@@ -76,7 +76,7 @@ pub const Mount = struct {
 pub const Linux = struct {
     // TODO: Sysctl are a set of key value pairs that are set for the container on start
     // sysctl: std.StringHashMap([]const u8),
-    // TODO: Namespaces contains the namespaces that are created and/or joined by the container
+    // Namespaces contains the namespaces that are created and/or joined by the container
     namespaces: []LinuxNamespace = &[_]LinuxNamespace{},
     // Devices are a list of device nodes that are created for the container
     devices: []LinuxDevice = &[_]LinuxDevice{},

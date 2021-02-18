@@ -3,6 +3,7 @@ const argparse = @import("argparse.zig");
 const process = @import("process.zig");
 const rootfs = @import("rootfs.zig");
 const runtime_spec = @import("runtime_spec.zig");
+const syscall = @import("syscall.zig");
 const utils = @import("utils.zig");
 
 const ZRunArgs = struct {
@@ -12,7 +13,7 @@ const ZRunArgs = struct {
     pid_file: ?[]const u8 = null,
 };
 
-pub fn main() !void {
+fn zrun() !?i32 {
     var alloc = std.heap.page_allocator;
 
     const zrun_args = try argparse.parse(ZRunArgs, .{ .allocator = alloc });
@@ -26,31 +27,34 @@ pub fn main() !void {
 
     // 1. Unshare CLONE_NEWPID
     // - fork
-    try utils.unshare(std.os.linux.CLONE_NEWPID);
-    try utils.fork(zrun_args.detach);
+    try utils.setupNamespace(.pid, runtime_config.linux.namespaces);
+    if (try utils.fork()) |pidfd| {
+        // TODO: Return continuation instead
+        return if (zrun_args.detach) null else pidfd;
+    }
 
     // 2. Unshare CLONE_NEWIPC
-    try utils.unshare(std.os.linux.CLONE_NEWIPC);
+    try utils.setupNamespace(.ipc, runtime_config.linux.namespaces);
 
     // 3. Unshare CLONE_NEWUTS
     // - Change hostname
-    try utils.unshare(std.os.linux.CLONE_NEWUTS);
+    try utils.setupNamespace(.uts, runtime_config.linux.namespaces);
     if (runtime_config.hostname) |hostname| {
-        try utils.sethostname(hostname);
+        try syscall.sethostname(hostname);
     }
 
     // 4. Unshare CLONE_NEWNET
     // - Back to old network namespace
     // - Set up network
     // - Enter new network namespace
-    try utils.unshare(std.os.linux.CLONE_NEWNET);
+    try utils.setupNamespace(.network, runtime_config.linux.namespaces);
 
     // 5. Unshare CLONE_NEWNS
     // - Prepare rootfs (Mount private, generate files ...)
     // - Mount dirs to rootfs
     // - Create devices
     // - Chroot
-    try utils.unshare(std.os.linux.CLONE_NEWNS);
+    try utils.setupNamespace(.mount, runtime_config.linux.namespaces);
     try rootfs.setup(alloc, &runtime_config);
 
     // 6. Finalize
@@ -58,4 +62,13 @@ pub fn main() !void {
     // - change user
     // - exec
     try process.execute(alloc, &runtime_config);
+
+    unreachable;
+}
+
+pub fn main() !void {
+    if (try zrun()) |pidfd| {
+        // Wait child outside zrun() to make sure all using memory released
+        _ = try utils.waitPidfd(pidfd, -1);
+    }
 }

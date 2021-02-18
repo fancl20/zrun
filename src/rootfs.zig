@@ -1,9 +1,13 @@
 const std = @import("std");
 const container = @import("container.zig");
-const utils = @import("utils.zig");
 const runtime_spec = @import("runtime_spec.zig");
+const syscall = @import("syscall.zig");
+const utils = @import("utils.zig");
 
-const NamespaceMountError = error{MountParentPrivateFailed};
+const RootfsSetupError = error{
+    MountParentPrivateFailed,
+    InvalidDeviceType,
+};
 
 fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
@@ -11,13 +15,13 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
 
     var parent = try arena.allocator.dupeZ(u8, rootfs);
     while (true) {
-        if (utils.mount(null, parent, null, std.os.linux.MS_PRIVATE, null)) |_| {
+        if (syscall.mount(null, parent, null, std.os.linux.MS_PRIVATE, null)) |_| {
             return;
         } else |_| if (std.fs.path.dirname(parent)) |dir| {
             parent[dir.len] = 0;
             parent = parent[0..dir.len :0];
         } else {
-            return NamespaceMountError.MountParentPrivateFailed;
+            return RootfsSetupError.MountParentPrivateFailed;
         }
     }
     unreachable();
@@ -25,8 +29,8 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
 
 fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
     try makeParentMountPrivate(alloc, rootfs);
-    try utils.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
-    try utils.mount(null, rootfs, null, std.os.linux.MS_PRIVATE, null);
+    try syscall.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
+    try syscall.mount(null, rootfs, null, std.os.linux.MS_PRIVATE, null);
 }
 
 fn updateMountFlags(current_flags: u32, name: []const u8) ?u32 {
@@ -81,7 +85,7 @@ fn doMounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_s
         }
         const dest = try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, m.destination });
         try utils.mkdirs(dest, 0o755);
-        try utils.mount(
+        try syscall.mount(
             try arena.allocator.dupeZ(u8, m.source),
             try arena.allocator.dupeZ(u8, dest),
             try arena.allocator.dupeZ(u8, m.type),
@@ -91,8 +95,6 @@ fn doMounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_s
     }
 }
 
-const DeviceCreateError = error{InvalidDeviceType};
-
 const DeviceType = enum(u8) {
     BlockDevice = 'b',
     CharDevice = 'c',
@@ -100,7 +102,7 @@ const DeviceType = enum(u8) {
     _,
 };
 
-fn getDeviceFileModeFromType(device_type: []u8) DeviceCreateError!u32 {
+fn getDeviceFileModeFromType(device_type: []u8) RootfsSetupError!u32 {
     if (device_type.len != 1) {
         return error.InvalidDeviceType;
     }
@@ -120,16 +122,16 @@ fn createDevices(alloc: *std.mem.Allocator, rootfs: [:0]const u8, devices: []run
         // TODO: Use fs.path.joinZ instead
         const dest = try arena.allocator.dupeZ(u8, try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, d.path }));
         const file_mode: std.os.linux.mode_t = d.fileMode | try getDeviceFileModeFromType(d.type);
-        const dev = utils.mkdev(d.major, d.minor);
-        try utils.mknod(dest, file_mode, dev);
-        try utils.chown(dest, d.uid, d.gid);
+        const dev = syscall.mkdev(d.major, d.minor);
+        try syscall.mknod(dest, file_mode, dev);
+        try syscall.chown(dest, d.uid, d.gid);
     }
 }
 
 fn moveChroot(rootfs: [:0]const u8) !void {
     try std.os.chdir(rootfs);
-    try utils.mount(rootfs, "/", null, std.os.linux.MS_MOVE, null);
-    try utils.chroot(".");
+    try syscall.mount(rootfs, "/", null, std.os.linux.MS_MOVE, null);
+    try syscall.chroot(".");
     try std.os.chdir("/");
 }
 
@@ -144,6 +146,6 @@ pub fn setup(alloc: *std.mem.Allocator, spec: *const runtime_spec.Spec) !void {
     try createDevices(alloc, rootfs, spec.linux.devices);
     try moveChroot(rootfs);
     if (spec.root.readonly) {
-        try utils.mount(null, "/", null, std.os.linux.MS_REMOUNT | std.os.linux.MS_BIND | std.os.linux.MS_RDONLY, null);
+        try syscall.mount(null, "/", null, std.os.linux.MS_REMOUNT | std.os.linux.MS_BIND | std.os.linux.MS_RDONLY, null);
     }
 }
