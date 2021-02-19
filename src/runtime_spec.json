@@ -6,6 +6,7 @@
             "gid": 0
         },
         "args": [
+            "/bin/busybox",
             "sh"
         ],
         "env": [
@@ -18,7 +19,7 @@
         "path": "rootfs",
         "readonly": true
     },
-    "hostname": "crun",
+    "hostname": "zrun",
     "mounts": [
         {
             "destination": "/proc",
@@ -99,6 +100,50 @@
             },
             {
                 "type": "mount"
+            }
+        ],
+        "devices": [
+            {
+                "path": "/dev/null",
+                "type": "c",
+                "major": 1,
+                "minor": 3,
+                "fileMode": 666
+            },
+            {
+                "path": "/dev/zero",
+                "type": "c",
+                "major": 1,
+                "minor": 5,
+                "fileMode": 666
+            },
+            {
+                "path": "/dev/full",
+                "type": "c",
+                "major": 1,
+                "minor": 7,
+                "fileMode": 666
+            },
+            {
+                "path": "/dev/tty",
+                "type": "c",
+                "major": 5,
+                "minor": 0,
+                "fileMode": 666
+            },
+            {
+                "path": "/dev/random",
+                "type": "c",
+                "major": 1,
+                "minor": 8,
+                "fileMode": 666
+            },
+            {
+                "path": "/dev/urandom",
+                "type": "c",
+                "major": 1,
+                "minor": 9,
+                "fileMode": 666
             }
         ]
     }

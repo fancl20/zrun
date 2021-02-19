@@ -10,6 +10,7 @@ const ZRunArgs = struct {
     bundle: []const u8 = ".",
     config: []const u8 = "runtime_spec.json",
     detach: bool = false,
+    // TODO: implement pid_file
     pid_file: ?[]const u8 = null,
 };
 
