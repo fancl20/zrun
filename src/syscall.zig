@@ -105,6 +105,26 @@ pub fn pidfd_open(pid: std.os.pid_t, flags: u32) !i32 {
     };
 }
 
+const SetnsError = error{
+    FileDescriptorInvalid,
+    InvalidExe,
+    SystemResources,
+    AccessDenied,
+    ProcessNotFound,
+} || std.os.UnexpectedError;
+
+pub fn setns(fd: std.os.fd_t, nstype: usize) SetnsError!void {
+    return switch (std.os.errno(std.os.linux.syscall2(.setns, @bitCast(u32, fd), nstype))) {
+        0 => {},
+        std.os.linux.EBADF => error.FileDescriptorInvalid,
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.EPERM => error.AccessDenied,
+        std.os.linux.ESRCH => error.ProcessNotFound,
+        else => |err| std.os.unexpectedErrno(err),
+    };
+}
+
 const UnshareError = error{
     InvalidExe,
     SystemResources,

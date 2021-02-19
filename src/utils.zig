@@ -91,8 +91,12 @@ pub const Namespace = enum(usize) {
 pub fn setupNamespace(namespace: Namespace, config: []runtime_spec.LinuxNamespace) !void {
     for (config) |namespace_config| {
         if (std.mem.eql(u8, @tagName(namespace), namespace_config.type)) {
-            // TODO: setns when path provided
-            try syscall.unshare(@enumToInt(namespace));
+            if (namespace_config.path) |path| {
+                const fd = try std.os.open(path, std.os.O_RDONLY | std.os.O_CLOEXEC, 0);
+                try syscall.setns(fd, @enumToInt(namespace));
+            } else {
+                try syscall.unshare(@enumToInt(namespace));
+            }
             return;
         }
     }
