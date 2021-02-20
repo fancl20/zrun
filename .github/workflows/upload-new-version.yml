@@ -1,0 +1,29 @@
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+name: Build and release
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+      - name: Lint
+        run: zig fmt --check src/*.zig
+      - name: Test
+        run: zig build test
+      - name: Build
+        run: zig build
+      - name: Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: zig-cache/zrun
+          asset_name: zrun
+          tag: ${{ github.ref }}
