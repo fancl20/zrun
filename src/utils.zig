@@ -45,7 +45,7 @@ pub fn JsonLoader(comptime T: type) type {
     };
 }
 
-pub fn waitPidfd(pidfd: i32, timeout: i32) !bool {
+fn waitPidfd(pidfd: i32, timeout: i32) !bool {
     const exited = try syscall.poll(&[_]std.os.pollfd{.{
         .fd = pidfd,
         .events = std.os.POLLIN,
@@ -54,7 +54,21 @@ pub fn waitPidfd(pidfd: i32, timeout: i32) !bool {
     return exited != 0;
 }
 
-pub fn fork() !?i32 {
+pub const Process = struct {
+    id: std.os.pid_t,
+    fd: std.os.fd_t,
+
+    pub fn wait(self: *const Process) !void {
+        _ = try waitPidfd(self.fd, -1);
+    }
+    pub fn createPidFile(self: *const Process, pid_file: []const u8) !void {
+        var f = try std.fs.createFileAbsolute(pid_file, .{ .exclusive = true, .mode = 0o644 });
+        defer f.close();
+        try std.fmt.format(f.writer(), "{}", .{self.id});
+    }
+};
+
+pub fn fork() !?Process {
     const ppidfd = try syscall.pidfd_open(std.os.linux.getpid(), 0);
     var pidfd: i32 = -1;
     var cloneArgs = syscall.clone_args{
@@ -70,8 +84,9 @@ pub fn fork() !?i32 {
         .set_tid_size = 0,
         .cgroup = 0,
     };
-    if ((try syscall.clone3(&cloneArgs)) != 0) {
-        return pidfd;
+    const pid = try syscall.clone3(&cloneArgs);
+    if (pid != 0) {
+        return Process{ .id = pid, .fd = pidfd };
     }
     _ = try std.os.prctl(.SET_PDEATHSIG, .{std.os.linux.SIGKILL});
     if (try waitPidfd(ppidfd, 0)) {

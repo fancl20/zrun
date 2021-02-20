@@ -179,6 +179,7 @@ test "parse multiple fields" {
         default: []const u8 = "default",
         float: f64,
         int: u32,
+        optional_str: ?[]const u8 = null,
     };
     const options = ArgParseOptions{ .allocator = std.testing.allocator };
     const parsed = try parseInternal(Args, &[_][]const u8{
@@ -190,11 +191,14 @@ test "parse multiple fields" {
         "1.1",
         "--int",
         "1234",
+        "--optional_str",
+        "optional",
     }, options);
     std.testing.expectEqual(@as([]const u8, "test"), parsed.str);
     std.testing.expectEqual(false, parsed.boolean);
     std.testing.expectEqual(@as(f64, 1.1), parsed.float);
     std.testing.expectEqual(@as(u32, 1234), parsed.int);
+    std.testing.expectEqual(@as(?[]const u8, "optional"), parsed.optional_str);
     defer parseFree(Args, parsed, options);
 }
 

@@ -10,11 +10,10 @@ const ZRunArgs = struct {
     bundle: []const u8 = ".",
     config: []const u8 = "runtime_spec.json",
     detach: bool = false,
-    // TODO: implement pid_file
     pid_file: ?[]const u8 = null,
 };
 
-fn zrun() !?i32 {
+fn zrun() !?utils.Process {
     var alloc = std.heap.page_allocator;
 
     const zrun_args = try argparse.parse(ZRunArgs, .{ .allocator = alloc });
@@ -29,9 +28,12 @@ fn zrun() !?i32 {
     // 1. Unshare CLONE_NEWPID
     // - fork
     try utils.setupNamespace(.pid, runtime_config.linux.namespaces);
-    if (try utils.fork()) |pidfd| {
+    if (try utils.fork()) |child| {
+        if (zrun_args.pid_file) |pid_file| {
+            try child.createPidFile(pid_file);
+        }
         // TODO: Return continuation instead
-        return if (zrun_args.detach) null else pidfd;
+        return if (zrun_args.detach) null else child;
     }
 
     // 2. Unshare CLONE_NEWIPC
@@ -68,8 +70,8 @@ fn zrun() !?i32 {
 }
 
 pub fn main() !void {
-    if (try zrun()) |pidfd| {
+    if (try zrun()) |child| {
         // Wait child outside zrun() to make sure all using memory released
-        _ = try utils.waitPidfd(pidfd, -1);
+        try child.wait();
     }
 }
