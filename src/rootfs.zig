@@ -27,6 +27,10 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
 }
 
 fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
+    // Remount / as MS_SLAVE to prevent mounts spread outside container. Use
+    // MS_SLAVE instead of MS_PRIVATE because we want mounts outside container
+    // spread into it (e.g. newly mounted namespaces in /run/netns).
+    // TODO: properly implement RootfsPropagation in OCI Spec.
     try syscall.mount(null, "/", null, std.os.linux.MS_SLAVE | std.os.linux.MS_REC, null);
     try makeParentMountPrivate(alloc, rootfs);
     try syscall.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
