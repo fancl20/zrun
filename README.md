@@ -18,6 +18,7 @@ struct {
     config: []const u8 = "runtime_spec.json",
     detach: bool = false,
     pid_file: ?[]const u8 = null,
+    systemd_activate: bool = false,
 };
 ```
 

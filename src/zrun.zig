@@ -11,6 +11,7 @@ const ZRunArgs = struct {
     config: []const u8 = "runtime_spec.json",
     detach: bool = false,
     pid_file: ?[]const u8 = null,
+    systemd_activate: bool = false,
 };
 
 fn zrun() !?utils.Process {
@@ -25,15 +26,17 @@ fn zrun() !?utils.Process {
     defer loader.deinit();
     const runtime_config = loader.value;
 
+    try utils.validateSpec(&runtime_config);
+
     // 1. Unshare CLONE_NEWPID
     // - fork
     try utils.setupNamespace(.pid, runtime_config.linux.namespaces);
-    if (try utils.fork()) |child| {
+    if (try utils.fork(zrun_args.detach)) |child| {
         if (zrun_args.pid_file) |pid_file| {
             try child.createPidFile(pid_file);
         }
         // TODO: Return continuation instead
-        return if (zrun_args.detach) null else child;
+        return child;
     }
 
     // 2. Unshare CLONE_NEWIPC
@@ -64,7 +67,12 @@ fn zrun() !?utils.Process {
     // - sysctl
     // - change user
     // - exec
-    try process.execute(alloc, &runtime_config);
+    // TODO: Maybe use --bypass_envs to bypass any env insteaf of --systemd_activate?
+    var bypass_envs: []const []const u8 = &[_][]u8{};
+    if (zrun_args.systemd_activate) {
+        bypass_envs = &[_][]const u8{ "LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES" };
+    }
+    try process.execute(alloc, &runtime_config.process, bypass_envs);
 
     unreachable;
 }

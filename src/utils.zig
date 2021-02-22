@@ -57,9 +57,12 @@ fn waitPidfd(pidfd: i32, timeout: i32) !bool {
 pub const Process = struct {
     id: std.os.pid_t,
     fd: std.os.fd_t,
+    detach: bool,
 
     pub fn wait(self: *const Process) !void {
-        _ = try waitPidfd(self.fd, -1);
+        if (!self.detach) {
+            _ = try waitPidfd(self.fd, -1);
+        }
     }
     pub fn createPidFile(self: *const Process, pid_file: []const u8) !void {
         var f = try std.fs.createFileAbsolute(pid_file, .{ .exclusive = true, .mode = 0o644 });
@@ -68,7 +71,7 @@ pub const Process = struct {
     }
 };
 
-pub fn fork() !?Process {
+pub fn fork(detach: bool) !?Process {
     const ppidfd = try syscall.pidfd_open(std.os.linux.getpid(), 0);
     var pidfd: i32 = -1;
     var cloneArgs = syscall.clone_args{
@@ -86,11 +89,13 @@ pub fn fork() !?Process {
     };
     const pid = try syscall.clone3(&cloneArgs);
     if (pid != 0) {
-        return Process{ .id = pid, .fd = pidfd };
+        return Process{ .id = pid, .fd = pidfd, .detach = detach };
     }
-    _ = try std.os.prctl(.SET_PDEATHSIG, .{std.os.linux.SIGKILL});
-    if (try waitPidfd(ppidfd, 0)) {
-        std.os.exit(0);
+    if (!detach) {
+        _ = try std.os.prctl(.SET_PDEATHSIG, .{std.os.linux.SIGKILL});
+        if (try waitPidfd(ppidfd, 0)) {
+            std.os.exit(0);
+        }
     }
     return null;
 }
@@ -113,6 +118,23 @@ pub fn setupNamespace(namespace: Namespace, config: []runtime_spec.LinuxNamespac
                 try syscall.unshare(@enumToInt(namespace));
             }
             return;
+        }
+    }
+    return;
+}
+
+const SpecError = error{UnknowNamespace};
+
+pub fn validateSpec(spec: *const runtime_spec.Spec) SpecError!void {
+    for (spec.linux.namespaces) |namespace_config| {
+        var valid = false;
+        inline for (@typeInfo(Namespace).Enum.fields) |filed| {
+            if (std.mem.eql(u8, filed.name, namespace_config.type)) {
+                valid = true;
+            }
+        }
+        if (!valid) {
+            return error.UnknowNamespace;
         }
     }
     return;

@@ -1,5 +1,4 @@
 const std = @import("std");
-const container = @import("container.zig");
 const runtime_spec = @import("runtime_spec.zig");
 const syscall = @import("syscall.zig");
 const utils = @import("utils.zig");
@@ -28,6 +27,7 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
 }
 
 fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
+    try syscall.mount(null, "/", null, std.os.linux.MS_SLAVE | std.os.linux.MS_REC, null);
     try makeParentMountPrivate(alloc, rootfs);
     try syscall.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
     try syscall.mount(null, rootfs, null, std.os.linux.MS_PRIVATE, null);
