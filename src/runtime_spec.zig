@@ -80,7 +80,7 @@ pub const Linux = struct {
     namespaces: []LinuxNamespace = &[_]LinuxNamespace{},
     // Devices are a list of device nodes that are created for the container
     devices: []LinuxDevice = &[_]LinuxDevice{},
-    // TODO: RootfsPropagation is the rootfs mount propagation mode for the container.
+    // RootfsPropagation is the rootfs mount propagation mode for the container.
     rootfsPropagation: ?[]u8 = null,
 };
 

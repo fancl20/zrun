@@ -3,10 +3,9 @@ const runtime_spec = @import("runtime_spec.zig");
 const syscall = @import("syscall.zig");
 const utils = @import("utils.zig");
 
-const RootfsSetupError = error{
-    MountParentPrivateFailed,
-    InvalidDeviceType,
-};
+const linux = std.os.linux;
+
+const RootfsSetupError = error{ MountParentPrivateFailed, InvalidDeviceType, InvalidRootfsPropagation };
 
 fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
@@ -14,7 +13,7 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
 
     var parent = try arena.allocator.dupeZ(u8, rootfs);
     while (true) {
-        if (syscall.mount(null, parent, null, std.os.linux.MS_PRIVATE, null)) |_| {
+        if (syscall.mount(null, parent, null, linux.MS_PRIVATE, null)) |_| {
             return;
         } else |_| if (std.fs.path.dirname(parent)) |dir| {
             parent[dir.len] = 0;
@@ -27,49 +26,44 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
 }
 
 fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
-    // Remount / as MS_SLAVE to prevent mounts spread outside container. Use
-    // MS_SLAVE instead of MS_PRIVATE because we want mounts outside container
-    // spread into it (e.g. newly mounted namespaces in /run/netns).
-    // TODO: properly implement RootfsPropagation in OCI Spec.
-    try syscall.mount(null, "/", null, std.os.linux.MS_SLAVE | std.os.linux.MS_REC, null);
     try makeParentMountPrivate(alloc, rootfs);
-    try syscall.mount(rootfs, rootfs, null, std.os.linux.MS_BIND | std.os.linux.MS_REC, null);
-    try syscall.mount(null, rootfs, null, std.os.linux.MS_PRIVATE, null);
+    try syscall.mount(rootfs, rootfs, null, linux.MS_BIND | linux.MS_REC, null);
+    try syscall.mount(null, rootfs, null, linux.MS_PRIVATE, null);
 }
 
 fn updateMountFlags(current_flags: u32, name: []const u8) ?u32 {
-    if (std.mem.eql(u8, name, "bind")) return current_flags | std.os.linux.MS_BIND;
-    if (std.mem.eql(u8, name, "rbind")) return current_flags | std.os.linux.MS_REC | std.os.linux.MS_BIND;
-    if (std.mem.eql(u8, name, "ro")) return current_flags | std.os.linux.MS_RDONLY;
-    if (std.mem.eql(u8, name, "rw")) return current_flags & ~@intCast(u32, std.os.linux.MS_RDONLY);
-    if (std.mem.eql(u8, name, "suid")) return current_flags & ~@intCast(u32, std.os.linux.MS_NOSUID);
-    if (std.mem.eql(u8, name, "nosuid")) return current_flags | std.os.linux.MS_NOSUID;
-    if (std.mem.eql(u8, name, "dev")) return current_flags & ~@intCast(u32, std.os.linux.MS_NODEV);
-    if (std.mem.eql(u8, name, "nodev")) return current_flags | std.os.linux.MS_NODEV;
-    if (std.mem.eql(u8, name, "exec")) return current_flags & ~@intCast(u32, std.os.linux.MS_NOEXEC);
-    if (std.mem.eql(u8, name, "noexec")) return current_flags | std.os.linux.MS_NOEXEC;
-    if (std.mem.eql(u8, name, "sync")) return current_flags | std.os.linux.MS_SYNCHRONOUS;
-    if (std.mem.eql(u8, name, "async")) return current_flags & ~@intCast(u32, std.os.linux.MS_SYNCHRONOUS);
-    if (std.mem.eql(u8, name, "dirsync")) return current_flags | std.os.linux.MS_DIRSYNC;
-    if (std.mem.eql(u8, name, "remount")) return current_flags | std.os.linux.MS_REMOUNT;
-    if (std.mem.eql(u8, name, "mand")) return current_flags | std.os.linux.MS_MANDLOCK;
-    if (std.mem.eql(u8, name, "nomand")) return current_flags & ~@intCast(u32, std.os.linux.MS_MANDLOCK);
-    if (std.mem.eql(u8, name, "atime")) return current_flags & ~@intCast(u32, std.os.linux.MS_NOATIME);
-    if (std.mem.eql(u8, name, "noatime")) return current_flags | std.os.linux.MS_NOATIME;
-    if (std.mem.eql(u8, name, "diratime")) return current_flags & ~@intCast(u32, std.os.linux.MS_NODIRATIME);
-    if (std.mem.eql(u8, name, "nodiratime")) return current_flags | std.os.linux.MS_NODIRATIME;
-    if (std.mem.eql(u8, name, "relatime")) return current_flags | std.os.linux.MS_RELATIME;
-    if (std.mem.eql(u8, name, "norelatime")) return current_flags & ~@intCast(u32, std.os.linux.MS_RELATIME);
-    if (std.mem.eql(u8, name, "strictatime")) return current_flags | std.os.linux.MS_STRICTATIME;
-    if (std.mem.eql(u8, name, "nostrictatime")) return current_flags & ~@intCast(u32, std.os.linux.MS_STRICTATIME);
-    if (std.mem.eql(u8, name, "shared")) return current_flags | std.os.linux.MS_SHARED;
-    if (std.mem.eql(u8, name, "rshared")) return current_flags | std.os.linux.MS_REC | std.os.linux.MS_SHARED;
-    if (std.mem.eql(u8, name, "slave")) return current_flags | std.os.linux.MS_SLAVE;
-    if (std.mem.eql(u8, name, "rslave")) return current_flags | std.os.linux.MS_REC | std.os.linux.MS_SLAVE;
-    if (std.mem.eql(u8, name, "private")) return current_flags | std.os.linux.MS_PRIVATE;
-    if (std.mem.eql(u8, name, "rprivate")) return current_flags | std.os.linux.MS_REC | std.os.linux.MS_PRIVATE;
-    if (std.mem.eql(u8, name, "unbindable")) return current_flags | std.os.linux.MS_UNBINDABLE;
-    if (std.mem.eql(u8, name, "runbindable")) return current_flags | std.os.linux.MS_REC | std.os.linux.MS_UNBINDABLE;
+    if (std.mem.eql(u8, name, "bind")) return current_flags | linux.MS_BIND;
+    if (std.mem.eql(u8, name, "rbind")) return current_flags | linux.MS_REC | linux.MS_BIND;
+    if (std.mem.eql(u8, name, "ro")) return current_flags | linux.MS_RDONLY;
+    if (std.mem.eql(u8, name, "rw")) return current_flags & ~@intCast(u32, linux.MS_RDONLY);
+    if (std.mem.eql(u8, name, "suid")) return current_flags & ~@intCast(u32, linux.MS_NOSUID);
+    if (std.mem.eql(u8, name, "nosuid")) return current_flags | linux.MS_NOSUID;
+    if (std.mem.eql(u8, name, "dev")) return current_flags & ~@intCast(u32, linux.MS_NODEV);
+    if (std.mem.eql(u8, name, "nodev")) return current_flags | linux.MS_NODEV;
+    if (std.mem.eql(u8, name, "exec")) return current_flags & ~@intCast(u32, linux.MS_NOEXEC);
+    if (std.mem.eql(u8, name, "noexec")) return current_flags | linux.MS_NOEXEC;
+    if (std.mem.eql(u8, name, "sync")) return current_flags | linux.MS_SYNCHRONOUS;
+    if (std.mem.eql(u8, name, "async")) return current_flags & ~@intCast(u32, linux.MS_SYNCHRONOUS);
+    if (std.mem.eql(u8, name, "dirsync")) return current_flags | linux.MS_DIRSYNC;
+    if (std.mem.eql(u8, name, "remount")) return current_flags | linux.MS_REMOUNT;
+    if (std.mem.eql(u8, name, "mand")) return current_flags | linux.MS_MANDLOCK;
+    if (std.mem.eql(u8, name, "nomand")) return current_flags & ~@intCast(u32, linux.MS_MANDLOCK);
+    if (std.mem.eql(u8, name, "atime")) return current_flags & ~@intCast(u32, linux.MS_NOATIME);
+    if (std.mem.eql(u8, name, "noatime")) return current_flags | linux.MS_NOATIME;
+    if (std.mem.eql(u8, name, "diratime")) return current_flags & ~@intCast(u32, linux.MS_NODIRATIME);
+    if (std.mem.eql(u8, name, "nodiratime")) return current_flags | linux.MS_NODIRATIME;
+    if (std.mem.eql(u8, name, "relatime")) return current_flags | linux.MS_RELATIME;
+    if (std.mem.eql(u8, name, "norelatime")) return current_flags & ~@intCast(u32, linux.MS_RELATIME);
+    if (std.mem.eql(u8, name, "strictatime")) return current_flags | linux.MS_STRICTATIME;
+    if (std.mem.eql(u8, name, "nostrictatime")) return current_flags & ~@intCast(u32, linux.MS_STRICTATIME);
+    if (std.mem.eql(u8, name, "shared")) return current_flags | linux.MS_SHARED;
+    if (std.mem.eql(u8, name, "rshared")) return current_flags | linux.MS_REC | linux.MS_SHARED;
+    if (std.mem.eql(u8, name, "slave")) return current_flags | linux.MS_SLAVE;
+    if (std.mem.eql(u8, name, "rslave")) return current_flags | linux.MS_REC | linux.MS_SLAVE;
+    if (std.mem.eql(u8, name, "private")) return current_flags | linux.MS_PRIVATE;
+    if (std.mem.eql(u8, name, "rprivate")) return current_flags | linux.MS_REC | linux.MS_PRIVATE;
+    if (std.mem.eql(u8, name, "unbindable")) return current_flags | linux.MS_UNBINDABLE;
+    if (std.mem.eql(u8, name, "runbindable")) return current_flags | linux.MS_REC | linux.MS_UNBINDABLE;
     return null;
 }
 
@@ -111,9 +105,9 @@ fn getDeviceFileModeFromType(device_type: []u8) RootfsSetupError!u32 {
         return error.InvalidDeviceType;
     }
     return switch (@intToEnum(DeviceType, device_type[0])) {
-        .BlockDevice => std.os.linux.S_IFBLK,
-        .CharDevice => std.os.linux.S_IFCHR,
-        .FifoDevice => std.os.linux.S_IFIFO,
+        .BlockDevice => linux.S_IFBLK,
+        .CharDevice => linux.S_IFCHR,
+        .FifoDevice => linux.S_IFIFO,
         _ => error.InvalidDeviceType,
     };
 }
@@ -125,7 +119,7 @@ fn createDevices(alloc: *std.mem.Allocator, rootfs: [:0]const u8, devices: []run
 
         // TODO: Use fs.path.joinZ instead
         const dest = try arena.allocator.dupeZ(u8, try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, d.path }));
-        const file_mode: std.os.linux.mode_t = d.fileMode | try getDeviceFileModeFromType(d.type);
+        const file_mode: linux.mode_t = d.fileMode | try getDeviceFileModeFromType(d.type);
         const dev = syscall.mkdev(d.major, d.minor);
         try syscall.mknod(dest, file_mode, dev);
         try syscall.chown(dest, d.uid, d.gid);
@@ -134,7 +128,7 @@ fn createDevices(alloc: *std.mem.Allocator, rootfs: [:0]const u8, devices: []run
 
 fn moveChroot(rootfs: [:0]const u8) !void {
     try std.os.chdir(rootfs);
-    try syscall.mount(rootfs, "/", null, std.os.linux.MS_MOVE, null);
+    try syscall.mount(rootfs, "/", null, linux.MS_MOVE, null);
     try syscall.chroot(".");
     try std.os.chdir("/");
 }
@@ -145,11 +139,21 @@ pub fn setup(alloc: *std.mem.Allocator, spec: *const runtime_spec.Spec) !void {
 
     const rootfs = try utils.realpathAllocZ(&arena.allocator, spec.root.path);
 
+    // Remount old rootfs before we preparing new rootfs to prevent leaking mounts outside namespace
+    var rootfs_propagation: u32 = linux.MS_REC | linux.MS_PRIVATE;
+    if (spec.linux.rootfsPropagation) |propagation| {
+        rootfs_propagation = updateMountFlags(0, propagation) orelse 0;
+    }
+    if (rootfs_propagation & (linux.MS_SHARED | linux.MS_SLAVE | linux.MS_PRIVATE | linux.MS_UNBINDABLE) == 0) {
+        return RootfsSetupError.InvalidRootfsPropagation;
+    }
+    try syscall.mount(null, "/", null, rootfs_propagation, null);
+
     try prepare(alloc, rootfs);
     try doMounts(alloc, rootfs, spec.mounts);
     try createDevices(alloc, rootfs, spec.linux.devices);
     try moveChroot(rootfs);
     if (spec.root.readonly) {
-        try syscall.mount(null, "/", null, std.os.linux.MS_REMOUNT | std.os.linux.MS_BIND | std.os.linux.MS_RDONLY, null);
+        try syscall.mount(null, "/", null, linux.MS_REMOUNT | linux.MS_BIND | linux.MS_RDONLY, null);
     }
 }
