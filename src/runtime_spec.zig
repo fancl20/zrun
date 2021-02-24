@@ -27,6 +27,8 @@ pub const Process = struct {
     args: [][]const u8 = &[_][]const u8{},
     // Env populates the process environment for the process.
     env: [][]const u8 = &[_][]const u8{},
+    // NONSTARDARD. BypassEnv bypass the parent's environment to the process.
+    bypassEnv: [][]const u8 = &[_][]const u8{},
     // Cwd is the current working directory for the process and must be
     // relative to the container's root.
     cwd: []const u8 = "/",

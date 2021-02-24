@@ -5,10 +5,11 @@ pub const ArgParseOptions = struct {
 };
 
 const ArgParseError = error{
-    UnexpectedArgument,
+    AllocatorRequired,
     InvalidArgs,
     MissingField,
-    AllocatorRequired,
+    UnexpectedArgument,
+    UnexpectedField,
 };
 
 pub fn parse(comptime T: type, options: ArgParseOptions) !T {
@@ -30,12 +31,17 @@ fn parseInternal(comptime T: type, args: []const []const u8, options: ArgParseOp
     while (iter.next()) |kv| {
         const key = kv[0][2..]; // Remove -- prefix
         const val = kv[1..];
+        var found = false;
         inline for (info.fields) |field, field_i| {
             if (std.mem.eql(u8, key, field.name)) {
                 fields_seen[field_i] = true;
                 @field(result, field.name) = try parseValues(field.field_type, val, options);
+                found = true;
                 break;
             }
+        }
+        if (!found) {
+            return error.UnexpectedField;
         }
     }
 
@@ -218,4 +224,27 @@ test "parse default values" {
     std.testing.expectEqual(@as(u32, 1234), parsed.int);
     std.testing.expectEqual(@as(?u32, null), parsed.optional);
     defer parseFree(Args, parsed, options);
+}
+
+test "parse missing field" {
+    const Args = struct {
+        str: []const u8
+    };
+    const options = ArgParseOptions{ .allocator = std.testing.allocator };
+    const parsed = parseInternal(Args, &[_][]const u8{}, options);
+    std.testing.expectError(error.MissingField, parsed);
+}
+
+test "parse unexpected field" {
+    const Args = struct {
+        str: []const u8
+    };
+    const options = ArgParseOptions{ .allocator = std.testing.allocator };
+    const parsed = parseInternal(Args, &[_][]const u8{
+        "--str",
+        "str",
+        "--something",
+        "some",
+    }, options);
+    std.testing.expectError(error.UnexpectedField, parsed);
 }

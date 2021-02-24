@@ -11,7 +11,6 @@ const ZRunArgs = struct {
     config: []const u8 = "runtime_spec.json",
     detach: bool = false,
     pid_file: ?[]const u8 = null,
-    systemd_activate: bool = false,
 };
 
 fn zrun() !?utils.Process {
@@ -67,12 +66,7 @@ fn zrun() !?utils.Process {
     // - sysctl
     // - change user
     // - exec
-    // TODO: Maybe use --bypass_envs to bypass any env insteaf of --systemd_activate?
-    var bypass_envs: []const []const u8 = &[_][]u8{};
-    if (zrun_args.systemd_activate) {
-        bypass_envs = &[_][]const u8{ "LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES" };
-    }
-    try process.execute(alloc, &runtime_config.process, bypass_envs);
+    try process.execute(alloc, &runtime_config.process);
 
     unreachable;
 }
