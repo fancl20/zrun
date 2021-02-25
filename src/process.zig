@@ -1,5 +1,6 @@
 const std = @import("std");
 const runtime_spec = @import("runtime_spec.zig");
+const syscall = @import("syscall.zig");
 
 pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
@@ -8,6 +9,8 @@ pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) 
     try std.os.setuid(process.user.uid);
     try std.os.setgid(process.user.gid);
     try std.os.chdir(process.cwd);
+    _ = syscall.umask(process.user.umask);
+    _ = try syscall.setgroups(process.user.additionalGids);
 
     var envs = std.BufMap.init(&arena.allocator);
     for (process.bypassEnv) |env| {

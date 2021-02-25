@@ -17,10 +17,6 @@ pub const Spec = struct {
 
 // Process contains information to start a specific application inside the container.
 pub const Process = struct {
-    // TODO: Terminal creates an interactive terminal for the container.
-    terminal: bool = false,
-    // TODO: ConsoleSize specifies the size of the console.
-    consoleSize: ?Box = null,
     // User specifies user information for the process.
     user: User,
     // Args specifies the binary and arguments for the application to execute.
@@ -34,23 +30,15 @@ pub const Process = struct {
     cwd: []const u8 = "/",
 };
 
-// Box specifies dimensions of a rectangle. Used for specifying the size of a console.
-pub const Box = struct {
-    // Height is the vertical dimension of a box.
-    height: u32,
-    // Width is the horizontal dimension of a box.
-    width: u32,
-};
-
 // User specifies specific user (and group) information for the container process.
 pub const User = struct {
     // UID is the user id.
     uid: u32,
     // GID is the group id.
     gid: u32,
-    // TODO: Umask is the umask for the init process.
-    umask: ?u32 = null,
-    // TODO: AdditionalGids are additional group ids set for the container's process.
+    // Umask is the umask for the init process.
+    umask: u32 = 0o022,
+    // AdditionalGids are additional group ids set for the container's process.
     additionalGids: []u32 = &[_]u32{},
 };
 

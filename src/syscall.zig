@@ -286,13 +286,13 @@ pub fn chown(pathname: [*:0]const u8, uid: std.os.linux.uid_t, gid: std.os.linux
     };
 }
 
-const SetHostnameError = error{
+const SethostnameError = error{
     InvalidExe,
     NameTooLong,
     AccessDenied,
 } || std.os.UnexpectedError;
 
-pub fn sethostname(name: []const u8) SetHostnameError!void {
+pub fn sethostname(name: []const u8) SethostnameError!void {
     return switch (std.os.errno(std.os.linux.syscall2(.sethostname, @ptrToInt(name.ptr), name.len))) {
         0 => {},
         std.os.linux.EFAULT => unreachable,
@@ -310,4 +310,26 @@ pub fn mkdev(major: u64, minor: u64) std.os.linux.dev_t {
     dev |= (minor & 0x000000ff) << 0;
     dev |= (minor & 0xffffff00) << 12;
     return dev;
+}
+
+pub fn umask(mask: std.os.mode_t) std.os.mode_t {
+    return std.os.errno(std.os.linux.syscall1(.umask, mask));
+}
+
+const SetgroupsError = error{
+    InvalidExe,
+    SystemResources,
+    AccessDenied,
+} || std.os.UnexpectedError;
+
+pub fn setgroups(list: []std.os.gid_t) SetgroupsError!usize {
+    const nums = std.os.linux.syscall2(.setgroups, list.len, @ptrToInt(list.ptr));
+    return switch (std.os.errno(nums)) {
+        0 => nums,
+        std.os.linux.EFAULT => unreachable,
+        std.os.linux.EINVAL => error.InvalidExe,
+        std.os.linux.ENOMEM => error.SystemResources,
+        std.os.linux.EPERM => error.AccessDenied,
+        else => |err| std.os.unexpectedErrno(err),
+    };
 }
