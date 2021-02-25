@@ -16,7 +16,14 @@ pub fn parse(comptime T: type, options: ArgParseOptions) !T {
     var args = std.ArrayList([]const u8).init(options.allocator);
     defer args.deinit();
     for (std.os.argv) |arg| {
-        try args.append(std.mem.spanZ(arg));
+        var str = std.mem.spanZ(arg);
+        if (std.mem.startsWith(u8, str, "--")) {
+            if (std.mem.indexOf(u8, str, "=")) |idx| {
+                try args.append(str[0..idx]);
+                str = str[idx + 1 ..];
+            }
+        }
+        try args.append(str);
     }
     return parseInternal(T, args.items[1..], options);
 }
@@ -242,7 +249,7 @@ test "parse unexpected field" {
     const options = ArgParseOptions{ .allocator = std.testing.allocator };
     const parsed = parseInternal(Args, &[_][]const u8{
         "--str",
-        "str",
+        "test",
         "--something",
         "some",
     }, options);
