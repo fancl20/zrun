@@ -36,8 +36,7 @@ pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) 
 }
 
 fn getenv(key: []const u8) ?[*:0]const u8 {
-    var ptr = std.c.environ;
-    while (ptr.*) |line| : (ptr += 1) {
+    for (std.os.environ) |line| {
         const env = std.mem.spanZ(line);
         if (env.len < key.len + 1) {
             continue;
