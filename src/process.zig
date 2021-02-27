@@ -3,8 +3,9 @@ const runtime_spec = @import("runtime_spec.zig");
 const syscall = @import("syscall.zig");
 
 pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) !void {
-    var arena = std.heap.ArenaAllocator.init(alloc);
-    defer arena.deinit();
+    var arena_allocator = std.heap.ArenaAllocator.init(alloc);
+    defer arena_allocator.deinit();
+    const arena = &arena_allocator.allocator;
 
     try std.os.setuid(process.user.uid);
     try std.os.setgid(process.user.gid);
@@ -12,16 +13,38 @@ pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) 
     _ = syscall.umask(process.user.umask);
     _ = try syscall.setgroups(process.user.additionalGids);
 
-    var envs = std.BufMap.init(&arena.allocator);
-    for (process.bypassEnv) |env| {
-        if (std.os.getenv(env)) |val| {
-            try envs.set(env, val);
+    const argv_buf = try arena.allocSentinel(?[*:0]const u8, process.args.len, null);
+    for (process.args) |arg, i| {
+        argv_buf[i] = (try arena.dupeZ(u8, arg)).ptr;
+    }
+
+    const envp = try arena.alloc(?[*:0]const u8, process.bypassEnv.len + process.env.len + 1);
+    var envp_i: usize = 0;
+    for (process.bypassEnv) |key, i| {
+        if (getenv(key)) |env| {
+            envp[envp_i] = env;
+            envp_i += 1;
         }
     }
     for (process.env) |env| {
-        const pos = std.mem.indexOf(u8, env, "=").?;
-        try envs.set(env[0..pos], env[pos + 1 ..]);
+        envp[envp_i] = try arena.dupeZ(u8, env);
+        envp_i += 1;
     }
+    envp[envp_i] = null;
 
-    return std.process.execve(&arena.allocator, process.args, &envs);
+    return std.os.execveZ(argv_buf.ptr[0].?, argv_buf.ptr, envp[0..envp_i :null].ptr);
+}
+
+fn getenv(key: []const u8) ?[*:0]const u8 {
+    var ptr = std.c.environ;
+    while (ptr.*) |line| : (ptr += 1) {
+        const env = std.mem.spanZ(line);
+        if (env.len < key.len + 1) {
+            continue;
+        }
+        if (std.mem.startsWith(u8, env, key) and env[key.len] == '=') {
+            return line;
+        }
+    }
+    return null;
 }
