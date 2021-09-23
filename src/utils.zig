@@ -48,7 +48,7 @@ pub fn JsonLoader(comptime T: type) type {
 fn waitPidfd(pidfd: i32, timeout: i32) !bool {
     const exited = try syscall.poll(&[_]std.os.pollfd{.{
         .fd = pidfd,
-        .events = std.os.POLLIN,
+        .events = std.os.POLL.IN,
         .revents = 0,
     }}, 1, timeout);
     return exited != 0;
@@ -75,7 +75,7 @@ pub fn fork(detach: bool) !?Process {
     const ppidfd = try syscall.pidfd_open(std.os.linux.getpid(), 0);
     var pidfd: i32 = -1;
     var cloneArgs = syscall.clone_args{
-        .flags = syscall.CLONE_PIDFD,
+        .flags = syscall.CLONE.PIDFD,
         .pidfd = @ptrToInt(&pidfd),
         .child_tid = 0,
         .parent_tid = 0,
@@ -92,7 +92,7 @@ pub fn fork(detach: bool) !?Process {
         return Process{ .id = pid, .fd = pidfd, .detach = detach };
     }
     if (!detach) {
-        _ = try std.os.prctl(.SET_PDEATHSIG, .{std.os.linux.SIGKILL});
+        _ = try std.os.prctl(.SET_PDEATHSIG, .{std.os.linux.SIG.KILL});
         if (try waitPidfd(ppidfd, 0)) {
             std.os.exit(0);
         }
@@ -101,18 +101,19 @@ pub fn fork(detach: bool) !?Process {
 }
 
 pub const Namespace = enum(usize) {
-    pid = std.os.linux.CLONE_NEWPID,
-    network = std.os.linux.CLONE_NEWNET,
-    ipc = std.os.linux.CLONE_NEWIPC,
-    uts = std.os.linux.CLONE_NEWUTS,
-    mount = std.os.linux.CLONE_NEWNS,
+    pid = syscall.CLONE.NEWPID,
+    network = syscall.CLONE.NEWNET,
+    ipc = syscall.CLONE.NEWIPC,
+    uts = syscall.CLONE.NEWUTS,
+    mount = syscall.CLONE.NEWNS,
 };
 
 pub fn setupNamespace(namespace: Namespace, config: []runtime_spec.LinuxNamespace) !void {
     for (config) |namespace_config| {
         if (std.mem.eql(u8, @tagName(namespace), namespace_config.type)) {
             if (namespace_config.path) |path| {
-                const fd = try std.os.open(path, std.os.O_RDONLY | std.os.O_CLOEXEC, 0);
+                const fd = try std.os.open(path, std.os.O.RDONLY | std.os.O.CLOEXEC, 0);
+                defer std.os.close(fd);
                 try syscall.setns(fd, @enumToInt(namespace));
             } else {
                 try syscall.unshare(@enumToInt(namespace));

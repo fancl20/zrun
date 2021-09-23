@@ -20,45 +20,47 @@ pub const clone_args = extern struct {
     cgroup: u64, // File descriptor for target cgroup of child (since Linux 5.7)
 };
 
-pub const CLONE_NEWTIME = 0x00000080;
-pub const CLONE_VM = 0x00000100;
-pub const CLONE_FS = 0x00000200;
-pub const CLONE_FILES = 0x00000400;
-pub const CLONE_SIGHAND = 0x00000800;
-pub const CLONE_PIDFD = 0x00001000;
-pub const CLONE_PTRACE = 0x00002000;
-pub const CLONE_VFORK = 0x00004000;
-pub const CLONE_PARENT = 0x00008000;
-pub const CLONE_THREAD = 0x00010000;
-pub const CLONE_NEWNS = 0x00020000;
-pub const CLONE_SYSVSEM = 0x00040000;
-pub const CLONE_SETTLS = 0x00080000;
-pub const CLONE_PARENT_SETTID = 0x00100000;
-pub const CLONE_CHILD_CLEARTID = 0x00200000;
-pub const CLONE_DETACHED = 0x00400000;
-pub const CLONE_UNTRACED = 0x00800000;
-pub const CLONE_CHILD_SETTID = 0x01000000;
-pub const CLONE_NEWCGROUP = 0x02000000;
-pub const CLONE_NEWUTS = 0x04000000;
-pub const CLONE_NEWIPC = 0x08000000;
-pub const CLONE_NEWUSER = 0x10000000;
-pub const CLONE_NEWPID = 0x20000000;
-pub const CLONE_NEWNET = 0x40000000;
-pub const CLONE_IO = 0x80000000;
+pub const CLONE = struct {
+    pub const NEWTIME = 0x00000080;
+    pub const VM = 0x00000100;
+    pub const FS = 0x00000200;
+    pub const FILES = 0x00000400;
+    pub const SIGHAND = 0x00000800;
+    pub const PIDFD = 0x00001000;
+    pub const PTRACE = 0x00002000;
+    pub const VFORK = 0x00004000;
+    pub const PARENT = 0x00008000;
+    pub const THREAD = 0x00010000;
+    pub const NEWNS = 0x00020000;
+    pub const SYSVSEM = 0x00040000;
+    pub const SETTLS = 0x00080000;
+    pub const PARENT_SETTID = 0x00100000;
+    pub const CHILD_CLEARTID = 0x00200000;
+    pub const DETACHED = 0x00400000;
+    pub const UNTRACED = 0x00800000;
+    pub const CHILD_SETTID = 0x01000000;
+    pub const NEWCGROUP = 0x02000000;
+    pub const NEWUTS = 0x04000000;
+    pub const NEWIPC = 0x08000000;
+    pub const NEWUSER = 0x10000000;
+    pub const NEWPID = 0x20000000;
+    pub const NEWNET = 0x40000000;
+    pub const IO = 0x80000000;
+};
 
 pub fn clone3(cl_args: *clone_args) CloneError!std.os.pid_t {
     const pid = std.os.linux.syscall2(.clone3, @ptrToInt(cl_args), @sizeOf(clone_args));
     return switch (std.os.errno(pid)) {
-        0 => @intCast(std.os.pid_t, @bitCast(isize, pid)),
-        std.os.linux.EAGAIN => error.SystemResources,
-        std.os.linux.EBUSY => error.SystemResources,
-        std.os.linux.EEXIST => error.SystemResources,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ENOMEM => return error.SystemResources,
-        std.os.linux.ENOSPC => return error.SystemResources,
-        std.os.linux.EOPNOTSUPP => return error.SystemResources,
-        std.os.linux.EPERM => error.AccessDenied,
-        std.os.linux.EUSERS => return error.SystemResources,
+        .SUCCESS => @intCast(std.os.pid_t, @bitCast(isize, pid)),
+        .AGAIN => error.SystemResources,
+        .BUSY => error.SystemResources,
+        .EXIST => error.SystemResources,
+        .INVAL => error.InvalidExe,
+        .NOMEM => return error.SystemResources,
+        .NOSPC => return error.SystemResources,
+        .OPNOTSUPP => return error.SystemResources,
+        .PERM => error.AccessDenied,
+        .USERS => return error.SystemResources,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -72,11 +74,11 @@ pub fn poll(fds: []std.os.pollfd, n: std.os.nfds_t, timeout: i32) PollError!usiz
     while (true) {
         const events = std.os.linux.syscall3(.poll, @ptrToInt(fds.ptr), n, @bitCast(u32, timeout));
         return switch (std.os.errno(events)) {
-            0 => events,
-            std.os.linux.EFAULT => unreachable,
-            std.os.linux.EINTR => continue,
-            std.os.linux.EINVAL => error.InvalidExe,
-            std.os.linux.ENOMEM => return error.SystemResources,
+            .SUCCESS => events,
+            .FAULT => unreachable,
+            .INTR => continue,
+            .INVAL => error.InvalidExe,
+            .NOMEM => return error.SystemResources,
             else => |err| std.os.unexpectedErrno(err),
         };
     }
@@ -94,13 +96,13 @@ const PidfdOpenError = error{
 pub fn pidfd_open(pid: std.os.pid_t, flags: u32) !i32 {
     const pidfd = std.os.linux.syscall2(.pidfd_open, @bitCast(u32, pid), flags);
     return switch (std.os.errno(pidfd)) {
-        0 => @intCast(i32, @bitCast(isize, pidfd)),
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.EMFILE => error.ProcessFdQuotaExceeded,
-        std.os.linux.ENFILE => error.SystemFdQuotaExceeded,
-        std.os.linux.ENODEV => error.NoDevice,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.ESRCH => error.ProcessNotFound,
+        .SUCCESS => @intCast(i32, @bitCast(isize, pidfd)),
+        .INVAL => error.InvalidExe,
+        .MFILE => error.ProcessFdQuotaExceeded,
+        .NFILE => error.SystemFdQuotaExceeded,
+        .NODEV => error.NoDevice,
+        .NOMEM => error.SystemResources,
+        .SRCH => error.ProcessNotFound,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -115,12 +117,12 @@ const SetnsError = error{
 
 pub fn setns(fd: std.os.fd_t, nstype: usize) SetnsError!void {
     return switch (std.os.errno(std.os.linux.syscall2(.setns, @bitCast(u32, fd), nstype))) {
-        0 => {},
-        std.os.linux.EBADF => error.FileDescriptorInvalid,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.EPERM => error.AccessDenied,
-        std.os.linux.ESRCH => error.ProcessNotFound,
+        .SUCCESS => {},
+        .BADF => error.FileDescriptorInvalid,
+        .INVAL => error.InvalidExe,
+        .NOMEM => error.SystemResources,
+        .PERM => error.AccessDenied,
+        .SRCH => error.ProcessNotFound,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -133,12 +135,12 @@ const UnshareError = error{
 
 pub fn unshare(flags: usize) UnshareError!void {
     return switch (std.os.errno(std.os.linux.syscall1(.unshare, flags))) {
-        0 => {},
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.ENOSPC => error.SystemResources,
-        std.os.linux.EPERM => error.AccessDenied,
-        std.os.linux.EUSERS => error.SystemResources,
+        .SUCCESS => {},
+        .INVAL => error.InvalidExe,
+        .NOMEM => error.SystemResources,
+        .NOSPC => error.SystemResources,
+        .PERM => error.AccessDenied,
+        .USERS => error.SystemResources,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -158,22 +160,22 @@ const MountError = error{
 
 pub fn mount(special: ?[*:0]const u8, dir: [*:0]const u8, fstype: ?[*:0]const u8, flags: u32, data: ?*u8) MountError!void {
     return switch (std.os.errno(std.os.linux.syscall5(.mount, @ptrToInt(special), @ptrToInt(dir), @ptrToInt(fstype), flags, @ptrToInt(data)))) {
-        0 => {},
-        std.os.linux.EACCES => error.AccessDenied,
-        std.os.linux.EBUSY => error.DeviceBusy,
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ELOOP => error.FileSystem,
-        std.os.linux.EMFILE => error.SystemResources,
-        std.os.linux.ENAMETOOLONG => error.NameTooLong,
-        std.os.linux.ENODEV => error.SystemResources,
-        std.os.linux.ENOENT => error.FileNotFound,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.ENOTBLK => error.NotBlockDevice,
-        std.os.linux.ENOTDIR => error.NotDir,
-        std.os.linux.ENXIO => error.InvalidExe,
-        std.os.linux.EPERM => error.AccessDenied,
-        std.os.linux.EROFS => error.ReadOnlyFileSystem,
+        .SUCCESS => {},
+        .ACCES => error.AccessDenied,
+        .BUSY => error.DeviceBusy,
+        .FAULT => unreachable,
+        .INVAL => error.InvalidExe,
+        .LOOP => error.FileSystem,
+        .MFILE => error.SystemResources,
+        .NAMETOOLONG => error.NameTooLong,
+        .NODEV => error.SystemResources,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOTBLK => error.NotBlockDevice,
+        .NOTDIR => error.NotDir,
+        .NXIO => error.InvalidExe,
+        .PERM => error.AccessDenied,
+        .ROFS => error.ReadOnlyFileSystem,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -190,15 +192,15 @@ const UmountError = error{
 
 pub fn umount2(special: [*:0]const u8, flags: u32) UmountError!void {
     return switch (std.os.errno(std.os.linux.syscall2(.umount2, @ptrToInt(special), flags))) {
-        0 => {},
-        std.os.linux.EAGAIN => error.WouldBlock,
-        std.os.linux.EBUSY => error.DeviceBusy,
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ENAMETOOLONG => error.NameTooLong,
-        std.os.linux.ENOENT => error.FileNotFound,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.EPERM => error.AccessDenied,
+        .SUCCESS => {},
+        .AGAIN => error.WouldBlock,
+        .BUSY => error.DeviceBusy,
+        .FAULT => unreachable,
+        .INVAL => error.InvalidExe,
+        .NAMETOOLONG => error.NameTooLong,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .PERM => error.AccessDenied,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -218,19 +220,19 @@ const MknodError = error{
 
 pub fn mknod(pathname: [*:0]const u8, mode: std.os.linux.mode_t, dev: std.os.linux.dev_t) MknodError!void {
     return switch (std.os.errno(std.os.linux.syscall3(.mknod, @ptrToInt(pathname), mode, dev))) {
-        0 => {},
-        std.os.linux.EACCES => error.AccessDenied,
-        std.os.linux.EDQUOT => error.DiskQuota,
-        std.os.linux.EEXIST => error.PathAlreadyExists,
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ELOOP => error.FileSystem,
-        std.os.linux.ENAMETOOLONG => error.NameTooLong,
-        std.os.linux.ENOENT => error.FileNotFound,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.ENOSPC => error.NoSpaceLeft,
-        std.os.linux.ENOTDIR => error.NotDir,
-        std.os.linux.EPERM => error.AccessDenied,
+        .SUCCESS => {},
+        .ACCES => error.AccessDenied,
+        .DQUOT => error.DiskQuota,
+        .EXIST => error.PathAlreadyExists,
+        .FAULT => unreachable,
+        .INVAL => error.InvalidExe,
+        .LOOP => error.FileSystem,
+        .NAMETOOLONG => error.NameTooLong,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOSPC => error.NoSpaceLeft,
+        .NOTDIR => error.NotDir,
+        .PERM => error.AccessDenied,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -246,16 +248,16 @@ const ChrootError = error{
 
 pub fn chroot(pathname: [*:0]const u8) ChrootError!void {
     return switch (std.os.errno(std.os.linux.syscall1(.chroot, @ptrToInt(pathname)))) {
-        0 => {},
-        std.os.linux.EACCES => error.AccessDenied,
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.EIO => error.FileSystem,
-        std.os.linux.ELOOP => error.FileSystem,
-        std.os.linux.ENAMETOOLONG => error.NameTooLong,
-        std.os.linux.ENOENT => error.FileNotFound,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.ENOTDIR => error.NotDir,
-        std.os.linux.EPERM => error.AccessDenied,
+        .SUCCESS => {},
+        .ACCES => error.AccessDenied,
+        .FAULT => unreachable,
+        .IO => error.FileSystem,
+        .LOOP => error.FileSystem,
+        .NAMETOOLONG => error.NameTooLong,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOTDIR => error.NotDir,
+        .PERM => error.AccessDenied,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -272,16 +274,16 @@ const ChownError = error{
 
 pub fn chown(pathname: [*:0]const u8, uid: std.os.linux.uid_t, gid: std.os.linux.gid_t) ChownError!void {
     return switch (std.os.errno(std.os.linux.syscall3(.chown, @ptrToInt(pathname), uid, gid))) {
-        0 => {},
-        std.os.linux.EACCES => error.AccessDenied,
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.ELOOP => error.FileSystem,
-        std.os.linux.ENAMETOOLONG => error.NameTooLong,
-        std.os.linux.ENOENT => error.FileNotFound,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.ENOTDIR => error.NotDir,
-        std.os.linux.EPERM => error.AccessDenied,
-        std.os.linux.EROFS => error.ReadOnlyFileSystem,
+        .SUCCESS => {},
+        .ACCES => error.AccessDenied,
+        .FAULT => unreachable,
+        .LOOP => error.FileSystem,
+        .NAMETOOLONG => error.NameTooLong,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOTDIR => error.NotDir,
+        .PERM => error.AccessDenied,
+        .ROFS => error.ReadOnlyFileSystem,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -294,11 +296,11 @@ const SethostnameError = error{
 
 pub fn sethostname(name: []const u8) SethostnameError!void {
     return switch (std.os.errno(std.os.linux.syscall2(.sethostname, @ptrToInt(name.ptr), name.len))) {
-        0 => {},
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ENAMETOOLONG => error.NameTooLong,
-        std.os.linux.EPERM => error.AccessDenied,
+        .SUCCESS => {},
+        .FAULT => unreachable,
+        .INVAL => error.InvalidExe,
+        .NAMETOOLONG => error.NameTooLong,
+        .PERM => error.AccessDenied,
         else => |err| std.os.unexpectedErrno(err),
     };
 }
@@ -313,7 +315,7 @@ pub fn mkdev(major: u64, minor: u64) std.os.linux.dev_t {
 }
 
 pub fn umask(mask: std.os.mode_t) std.os.mode_t {
-    return std.os.errno(std.os.linux.syscall1(.umask, mask));
+    return std.os.linux.syscall1(.umask, mask);
 }
 
 const SetgroupsError = error{
@@ -325,11 +327,11 @@ const SetgroupsError = error{
 pub fn setgroups(list: []std.os.gid_t) SetgroupsError!usize {
     const nums = std.os.linux.syscall2(.setgroups, list.len, @ptrToInt(list.ptr));
     return switch (std.os.errno(nums)) {
-        0 => nums,
-        std.os.linux.EFAULT => unreachable,
-        std.os.linux.EINVAL => error.InvalidExe,
-        std.os.linux.ENOMEM => error.SystemResources,
-        std.os.linux.EPERM => error.AccessDenied,
+        .SUCCESS => nums,
+        .FAULT => unreachable,
+        .INVAL => error.InvalidExe,
+        .NOMEM => error.SystemResources,
+        .PERM => error.AccessDenied,
         else => |err| std.os.unexpectedErrno(err),
     };
 }

@@ -20,7 +20,7 @@ pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) 
 
     const envp = try arena.alloc(?[*:0]const u8, process.bypassEnv.len + process.env.len + 1);
     var envp_i: usize = 0;
-    for (process.bypassEnv) |key, i| {
+    for (process.bypassEnv) |key| {
         if (getenv(key)) |env| {
             envp[envp_i] = env;
             envp_i += 1;
@@ -31,6 +31,8 @@ pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) 
         envp_i += 1;
     }
     envp[envp_i] = null;
+
+    _ = try std.os.prctl(.SET_CHILD_SUBREAPER, .{});
 
     return std.os.execveZ(argv_buf.ptr[0].?, argv_buf.ptr, envp[0..envp_i :null].ptr);
 }

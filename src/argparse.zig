@@ -139,7 +139,7 @@ fn parseValues(comptime T: type, values: []const []const u8, options: ArgParseOp
                 .One => {
                     const allocator = options.allocator orelse return error.AllocatorRequired;
                     const r: T = try allocator.create(ptrInfo.child);
-                    r.* = try parseValues(ptrInfo.child, token, tokens, options);
+                    r.* = try parseValues(ptrInfo.child, values, options);
                     return r;
                 },
                 .Slice => {
