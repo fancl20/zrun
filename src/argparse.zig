@@ -207,11 +207,11 @@ test "parse multiple fields" {
         "--optional_str",
         "optional",
     }, options);
-    std.testing.expectEqual(@as([]const u8, "test"), parsed.str);
-    std.testing.expectEqual(false, parsed.boolean);
-    std.testing.expectEqual(@as(f64, 1.1), parsed.float);
-    std.testing.expectEqual(@as(u32, 1234), parsed.int);
-    std.testing.expectEqual(@as(?[]const u8, "optional"), parsed.optional_str);
+    try std.testing.expectEqual(@as([]const u8, "test"), parsed.str);
+    try std.testing.expectEqual(false, parsed.boolean);
+    try std.testing.expectEqual(@as(f64, 1.1), parsed.float);
+    try std.testing.expectEqual(@as(u32, 1234), parsed.int);
+    try std.testing.expectEqual(@as(?[]const u8, "optional"), parsed.optional_str);
     defer parseFree(Args, parsed, options);
 }
 
@@ -225,11 +225,11 @@ test "parse default values" {
     };
     const options = ArgParseOptions{ .allocator = std.testing.allocator };
     const parsed = try parseInternal(Args, &[_][]const u8{}, options);
-    std.testing.expectEqual(@as([]const u8, "test"), parsed.str);
-    std.testing.expectEqual(false, parsed.boolean);
-    std.testing.expectEqual(@as(f64, 1.1), parsed.float);
-    std.testing.expectEqual(@as(u32, 1234), parsed.int);
-    std.testing.expectEqual(@as(?u32, null), parsed.optional);
+    try std.testing.expectEqual(@as([]const u8, "test"), parsed.str);
+    try std.testing.expectEqual(false, parsed.boolean);
+    try std.testing.expectEqual(@as(f64, 1.1), parsed.float);
+    try std.testing.expectEqual(@as(u32, 1234), parsed.int);
+    try std.testing.expectEqual(@as(?u32, null), parsed.optional);
     defer parseFree(Args, parsed, options);
 }
 
@@ -239,7 +239,7 @@ test "parse missing field" {
     };
     const options = ArgParseOptions{ .allocator = std.testing.allocator };
     const parsed = parseInternal(Args, &[_][]const u8{}, options);
-    std.testing.expectError(error.MissingField, parsed);
+    try std.testing.expectError(error.MissingField, parsed);
 }
 
 test "parse unexpected field" {
@@ -253,5 +253,5 @@ test "parse unexpected field" {
         "--something",
         "some",
     }, options);
-    std.testing.expectError(error.UnexpectedField, parsed);
+    try std.testing.expectError(error.UnexpectedField, parsed);
 }
