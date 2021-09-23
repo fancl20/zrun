@@ -235,7 +235,7 @@ test "parse default values" {
 
 test "parse missing field" {
     const Args = struct {
-        str: []const u8
+        str: []const u8,
     };
     const options = ArgParseOptions{ .allocator = std.testing.allocator };
     const parsed = parseInternal(Args, &[_][]const u8{}, options);
@@ -244,7 +244,7 @@ test "parse missing field" {
 
 test "parse unexpected field" {
     const Args = struct {
-        str: []const u8
+        str: []const u8,
     };
     const options = ArgParseOptions{ .allocator = std.testing.allocator };
     const parsed = parseInternal(Args, &[_][]const u8{
