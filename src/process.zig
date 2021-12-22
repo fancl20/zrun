@@ -2,10 +2,10 @@ const std = @import("std");
 const runtime_spec = @import("runtime_spec.zig");
 const syscall = @import("syscall.zig");
 
-pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) !void {
+pub fn execute(alloc: std.mem.Allocator, process: *const runtime_spec.Process) !void {
     var arena_allocator = std.heap.ArenaAllocator.init(alloc);
     defer arena_allocator.deinit();
-    const arena = &arena_allocator.allocator;
+    const arena = arena_allocator.allocator();
 
     try std.os.setuid(process.user.uid);
     try std.os.setgid(process.user.gid);
@@ -39,7 +39,7 @@ pub fn execute(alloc: *std.mem.Allocator, process: *const runtime_spec.Process) 
 
 fn getenv(key: []const u8) ?[*:0]const u8 {
     for (std.os.environ) |line| {
-        const env = std.mem.spanZ(line);
+        const env = std.mem.span(line);
         if (env.len < key.len + 1) {
             continue;
         }

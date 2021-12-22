@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const ArgParseOptions = struct {
-    allocator: *std.mem.Allocator = std.heap.c_allocator,
+    allocator: std.mem.Allocator = std.heap.c_allocator,
 };
 
 const ArgParseError = error{
@@ -16,7 +16,7 @@ pub fn parse(comptime T: type, options: ArgParseOptions) !T {
     var args = std.ArrayList([]const u8).init(options.allocator);
     defer args.deinit();
     for (std.os.argv) |arg| {
-        var str = std.mem.spanZ(arg);
+        var str = std.mem.span(arg);
         if (std.mem.startsWith(u8, str, "--")) {
             if (std.mem.indexOf(u8, str, "=")) |idx| {
                 try args.append(str[0..idx]);

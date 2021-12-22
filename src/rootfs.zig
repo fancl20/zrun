@@ -7,11 +7,11 @@ const linux = std.os.linux;
 
 const RootfsSetupError = error{ MountParentPrivateFailed, InvalidDeviceType, InvalidRootfsPropagation };
 
-fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
+fn makeParentMountPrivate(alloc: std.mem.Allocator, rootfs: [:0]const u8) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
-    var parent = try arena.allocator.dupeZ(u8, rootfs);
+    var parent = try arena.allocator().dupeZ(u8, rootfs);
     while (true) {
         if (syscall.mount(null, parent, null, linux.MS.PRIVATE, null)) |_| {
             return;
@@ -25,7 +25,7 @@ fn makeParentMountPrivate(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void
     unreachable();
 }
 
-fn prepare(alloc: *std.mem.Allocator, rootfs: [:0]const u8) !void {
+fn prepare(alloc: std.mem.Allocator, rootfs: [:0]const u8) !void {
     try makeParentMountPrivate(alloc, rootfs);
     try syscall.mount(rootfs, rootfs, null, linux.MS.BIND | linux.MS.REC, null);
     try syscall.mount(null, rootfs, null, linux.MS.PRIVATE, null);
@@ -67,13 +67,13 @@ fn updateMountFlags(current_flags: u32, name: []const u8) ?u32 {
     return null;
 }
 
-fn doMounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_spec.Mount) !void {
+fn doMounts(alloc: std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_spec.Mount) !void {
     for (mounts) |m| {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
 
         var flags: u32 = 0;
-        var opts = try std.ArrayList([]const u8).initCapacity(&arena.allocator, m.options.len);
+        var opts = try std.ArrayList([]const u8).initCapacity(arena.allocator(), m.options.len);
         for (m.options) |opt| {
             if (updateMountFlags(flags, opt)) |new_flags| {
                 flags = new_flags;
@@ -81,14 +81,14 @@ fn doMounts(alloc: *std.mem.Allocator, rootfs: [:0]const u8, mounts: []runtime_s
                 opts.appendAssumeCapacity(opt);
             }
         }
-        const dest = try std.fs.path.join(&arena.allocator, &[_][]const u8{ rootfs, m.destination });
+        const dest = try std.fs.path.join(arena.allocator(), &[_][]const u8{ rootfs, m.destination });
         try utils.mkdirs(dest, 0o755);
         try syscall.mount(
-            try arena.allocator.dupeZ(u8, m.source),
-            try arena.allocator.dupeZ(u8, dest),
-            try arena.allocator.dupeZ(u8, m.type),
+            try arena.allocator().dupeZ(u8, m.source),
+            try arena.allocator().dupeZ(u8, dest),
+            try arena.allocator().dupeZ(u8, m.type),
             flags,
-            @ptrCast(*u8, try std.mem.joinZ(&arena.allocator, ",", opts.items)),
+            @ptrCast(*u8, try std.mem.joinZ(arena.allocator(), ",", opts.items)),
         );
     }
 }
@@ -112,12 +112,12 @@ fn getDeviceFileModeFromType(device_type: []u8) RootfsSetupError!u32 {
     };
 }
 
-fn createDevices(alloc: *std.mem.Allocator, rootfs: [:0]const u8, devices: []runtime_spec.LinuxDevice) !void {
+fn createDevices(alloc: std.mem.Allocator, rootfs: [:0]const u8, devices: []runtime_spec.LinuxDevice) !void {
     for (devices) |d| {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
 
-        const dest = try std.fs.path.joinZ(&arena.allocator, &[_][]const u8{ rootfs, d.path });
+        const dest = try std.fs.path.joinZ(arena.allocator(), &[_][]const u8{ rootfs, d.path });
         const file_mode: linux.mode_t = d.fileMode | try getDeviceFileModeFromType(d.type);
         const dev = syscall.mkdev(d.major, d.minor);
         try syscall.mknod(dest, file_mode, dev);
@@ -132,11 +132,11 @@ fn moveChroot(rootfs: [:0]const u8) !void {
     try std.os.chdir("/");
 }
 
-pub fn setup(alloc: *std.mem.Allocator, spec: *const runtime_spec.Spec) !void {
+pub fn setup(alloc: std.mem.Allocator, spec: *const runtime_spec.Spec) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
 
-    const rootfs = try utils.realpathAllocZ(&arena.allocator, spec.root.path);
+    const rootfs = try utils.realpathAllocZ(arena.allocator(), spec.root.path);
 
     // Remount old rootfs before we preparing new rootfs to prevent leaking mounts outside namespace
     var rootfs_propagation: u32 = linux.MS.REC | linux.MS.PRIVATE;

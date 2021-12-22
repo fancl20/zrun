@@ -2,7 +2,7 @@ const std = @import("std");
 const runtime_spec = @import("runtime_spec.zig");
 const syscall = @import("syscall.zig");
 
-pub fn realpathAllocZ(alloc: *std.mem.Allocator, pathname: []const u8) ![:0]u8 {
+pub fn realpathAllocZ(alloc: std.mem.Allocator, pathname: []const u8) ![:0]u8 {
     var buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
     return alloc.dupeZ(u8, try std.fs.cwd().realpath(pathname, buf[0..]));
 }
@@ -26,14 +26,14 @@ pub fn JsonLoader(comptime T: type) type {
         parseOption: std.json.ParseOptions,
         value: T,
 
-        pub fn init(alloc: *std.mem.Allocator, slice: []const u8) !Self {
+        pub fn init(alloc: std.mem.Allocator, slice: []const u8) !Self {
             var option = std.json.ParseOptions{ .allocator = alloc };
             return Self{
                 .parseOption = option,
                 .value = try std.json.parse(T, &std.json.TokenStream.init(slice), option),
             };
         }
-        pub fn initFromFile(alloc: *std.mem.Allocator, path: []const u8) !Self {
+        pub fn initFromFile(alloc: std.mem.Allocator, path: []const u8) !Self {
             var file = try std.fs.cwd().openFile(path, .{});
             var content = try file.readToEndAlloc(alloc, 65535);
             defer alloc.free(content);
