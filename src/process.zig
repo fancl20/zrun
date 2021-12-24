@@ -18,14 +18,8 @@ pub fn execute(alloc: std.mem.Allocator, process: *const runtime_spec.Process) !
         argv_buf[i] = (try arena.dupeZ(u8, arg)).ptr;
     }
 
-    const envp = try arena.alloc(?[*:0]const u8, process.bypassEnv.len + process.env.len + 1);
+    const envp = try arena.alloc(?[*:0]const u8, process.env.len + 1);
     var envp_i: usize = 0;
-    for (process.bypassEnv) |key| {
-        if (getenv(key)) |env| {
-            envp[envp_i] = env;
-            envp_i += 1;
-        }
-    }
     for (process.env) |env| {
         envp[envp_i] = try arena.dupeZ(u8, env);
         envp_i += 1;

@@ -94,6 +94,7 @@ pub fn fork(detach: bool) !?Process {
     if (!detach) {
         _ = try std.os.prctl(.SET_PDEATHSIG, .{std.os.linux.SIG.KILL});
         if (try waitPidfd(ppidfd, 0)) {
+            // Exit if parent process exited before child process ready.
             std.os.exit(0);
         }
     }

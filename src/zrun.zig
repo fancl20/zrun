@@ -13,7 +13,7 @@ const ZRunArgs = struct {
     pid_file: ?[]const u8 = null,
 };
 
-fn zrun() !?utils.Process {
+fn zrun() !utils.Process {
     var alloc = std.heap.page_allocator;
 
     const zrun_args = try argparse.parse(ZRunArgs, .{ .allocator = alloc });
@@ -34,7 +34,6 @@ fn zrun() !?utils.Process {
         if (zrun_args.pid_file) |pid_file| {
             try child.createPidFile(pid_file);
         }
-        // TODO: Return continuation instead
         return child;
     }
 
@@ -72,8 +71,7 @@ fn zrun() !?utils.Process {
 }
 
 pub fn main() !void {
-    if (try zrun()) |child| {
-        // Wait child outside zrun() to make sure all using memory released
-        try child.wait();
-    }
+    // Wait child outside zrun() to make sure all using memory released
+    var child = try zrun();
+    try child.wait();
 }
