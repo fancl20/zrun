@@ -14,14 +14,15 @@ const ZRunArgs = struct {
 };
 
 fn zrun() !utils.Process {
-    var alloc = std.heap.page_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var global_allocator = gpa.allocator();
 
-    const zrun_args = try argparse.parse(ZRunArgs, .{ .allocator = alloc });
-    defer argparse.parseFree(ZRunArgs, zrun_args, .{ .allocator = alloc });
+    const zrun_args = try argparse.parse(ZRunArgs, .{ .allocator = global_allocator });
+    defer argparse.parseFree(ZRunArgs, zrun_args, .{ .allocator = global_allocator });
     try std.os.chdir(zrun_args.bundle);
 
     // 0. Load configure
-    var loader = try utils.JsonLoader(runtime_spec.Spec).initFromFile(alloc, zrun_args.config);
+    var loader = try utils.JsonLoader(runtime_spec.Spec).initFromFile(global_allocator, zrun_args.config);
     defer loader.deinit();
     const runtime_config = loader.value;
 
@@ -59,13 +60,13 @@ fn zrun() !utils.Process {
     // - Create devices
     // - Chroot
     try utils.setupNamespace(.mount, runtime_config.linux.namespaces);
-    try rootfs.setup(alloc, &runtime_config);
+    try rootfs.setup(global_allocator, &runtime_config);
 
     // 6. Finalize
     // - sysctl
     // - change user
     // - exec
-    try process.execute(alloc, &runtime_config.process);
+    try process.execute(global_allocator, &runtime_config.process);
 
     unreachable;
 }

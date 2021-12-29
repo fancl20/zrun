@@ -1,7 +1,10 @@
 const std = @import("std");
 
 pub fn main() !void {
-    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var global_allocator = gpa.allocator();
+
+    var arena_allocator = std.heap.ArenaAllocator.init(global_allocator);
     defer arena_allocator.deinit();
     var arena = arena_allocator.allocator();
 

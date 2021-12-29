@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const ArgParseOptions = struct {
-    allocator: std.mem.Allocator = std.heap.c_allocator,
+    allocator: std.mem.Allocator,
 };
 
 const ArgParseError = error{
