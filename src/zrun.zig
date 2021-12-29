@@ -75,3 +75,7 @@ pub fn main() !void {
     var child = try zrun();
     try child.wait();
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}
