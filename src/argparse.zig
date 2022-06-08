@@ -57,7 +57,7 @@ fn parseInternal(comptime T: type, args: []const []const u8, options: ArgParseOp
         if (!fields_seen[i]) {
             if (field.default_value) |default| {
                 if (!field.is_comptime) {
-                    @field(result, field.name) = default;
+                    @field(result, field.name) = @ptrCast(*const field.field_type, default).*;
                 }
             } else {
                 return error.MissingField;
