@@ -27,10 +27,11 @@ pub fn JsonLoader(comptime T: type) type {
         value: T,
 
         pub fn init(alloc: std.mem.Allocator, slice: []const u8) !Self {
+            var tokenStream = std.json.TokenStream.init(slice);
             var option = std.json.ParseOptions{ .allocator = alloc };
             return Self{
                 .parseOption = option,
-                .value = try std.json.parse(T, &std.json.TokenStream.init(slice), option),
+                .value = try std.json.parse(T, &tokenStream, option),
             };
         }
         pub fn initFromFile(alloc: std.mem.Allocator, path: []const u8) !Self {

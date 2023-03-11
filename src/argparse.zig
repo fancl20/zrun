@@ -39,10 +39,10 @@ fn parseInternal(comptime T: type, args: []const []const u8, options: ArgParseOp
         const key = kv[0][2..]; // Remove -- prefix
         const val = kv[1..];
         var found = false;
-        inline for (info.fields) |field, field_i| {
+        inline for (info.fields, 0..) |field, field_i| {
             if (std.mem.eql(u8, key, field.name)) {
                 fields_seen[field_i] = true;
-                @field(result, field.name) = try parseValues(field.field_type, val, options);
+                @field(result, field.name) = try parseValues(field.type, val, options);
                 found = true;
                 break;
             }
@@ -53,11 +53,11 @@ fn parseInternal(comptime T: type, args: []const []const u8, options: ArgParseOp
     }
 
     // Set default value
-    inline for (info.fields) |field, i| {
+    inline for (info.fields, 0..) |field, i| {
         if (!fields_seen[i]) {
             if (field.default_value) |default| {
                 if (!field.is_comptime) {
-                    @field(result, field.name) = @ptrCast(*const field.field_type, default).*;
+                    @field(result, field.name) = @ptrCast(*align(1) const field.type, default).*;
                 }
             } else {
                 return error.MissingField;
@@ -126,7 +126,7 @@ fn parseValues(comptime T: type, values: []const []const u8, options: ArgParseOp
             return error.InvalidArgs;
         },
         .Float, .ComptimeFloat => {
-            return try std.fmt.parseFloat(T, values[0]) catch error.InvalidArgs;
+            return std.fmt.parseFloat(T, values[0]) catch error.InvalidArgs;
         },
         .Int, .ComptimeInt => {
             return std.fmt.parseInt(T, values[0], 10) catch error.InvalidArgs;
@@ -155,7 +155,7 @@ fn parseValues(comptime T: type, values: []const []const u8, options: ArgParseOp
 
 pub fn parseFree(comptime T: type, value: T, options: ArgParseOptions) void {
     inline for (@typeInfo(T).Struct.fields) |field| {
-        fieldFree(field.field_type, @field(value, field.name), options);
+        fieldFree(field.type, @field(value, field.name), options);
     }
 }
 

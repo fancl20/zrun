@@ -51,5 +51,8 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# VSCode
+.vscode/
+
 # Zig
 zig-cache/

@@ -14,7 +14,7 @@ pub fn execute(alloc: std.mem.Allocator, process: *const runtime_spec.Process) !
     _ = try syscall.setgroups(process.user.additionalGids);
 
     const argv_buf = try arena.allocSentinel(?[*:0]const u8, process.args.len, null);
-    for (process.args) |arg, i| {
+    for (process.args, 0..) |arg, i| {
         argv_buf[i] = (try arena.dupeZ(u8, arg)).ptr;
     }
 
