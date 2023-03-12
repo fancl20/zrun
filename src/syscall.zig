@@ -20,34 +20,6 @@ pub const clone_args = extern struct {
     cgroup: u64, // File descriptor for target cgroup of child (since Linux 5.7)
 };
 
-pub const CLONE = struct {
-    pub const NEWTIME = 0x00000080;
-    pub const VM = 0x00000100;
-    pub const FS = 0x00000200;
-    pub const FILES = 0x00000400;
-    pub const SIGHAND = 0x00000800;
-    pub const PIDFD = 0x00001000;
-    pub const PTRACE = 0x00002000;
-    pub const VFORK = 0x00004000;
-    pub const PARENT = 0x00008000;
-    pub const THREAD = 0x00010000;
-    pub const NEWNS = 0x00020000;
-    pub const SYSVSEM = 0x00040000;
-    pub const SETTLS = 0x00080000;
-    pub const PARENT_SETTID = 0x00100000;
-    pub const CHILD_CLEARTID = 0x00200000;
-    pub const DETACHED = 0x00400000;
-    pub const UNTRACED = 0x00800000;
-    pub const CHILD_SETTID = 0x01000000;
-    pub const NEWCGROUP = 0x02000000;
-    pub const NEWUTS = 0x04000000;
-    pub const NEWIPC = 0x08000000;
-    pub const NEWUSER = 0x10000000;
-    pub const NEWPID = 0x20000000;
-    pub const NEWNET = 0x40000000;
-    pub const IO = 0x80000000;
-};
-
 pub fn clone3(cl_args: *clone_args) CloneError!std.os.pid_t {
     const pid = std.os.linux.syscall2(.clone3, @ptrToInt(cl_args), @sizeOf(clone_args));
     return switch (std.os.errno(pid)) {

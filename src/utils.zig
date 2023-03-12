@@ -76,7 +76,7 @@ pub fn fork(detach: bool) !?Process {
     const ppidfd = try syscall.pidfd_open(std.os.linux.getpid(), 0);
     var pidfd: i32 = -1;
     var cloneArgs = syscall.clone_args{
-        .flags = syscall.CLONE.PIDFD,
+        .flags = std.os.linux.CLONE.PIDFD,
         .pidfd = @ptrToInt(&pidfd),
         .child_tid = 0,
         .parent_tid = 0,
@@ -103,11 +103,11 @@ pub fn fork(detach: bool) !?Process {
 }
 
 pub const Namespace = enum(usize) {
-    pid = syscall.CLONE.NEWPID,
-    network = syscall.CLONE.NEWNET,
-    ipc = syscall.CLONE.NEWIPC,
-    uts = syscall.CLONE.NEWUTS,
-    mount = syscall.CLONE.NEWNS,
+    pid = std.os.linux.CLONE.NEWPID,
+    network = std.os.linux.CLONE.NEWNET,
+    ipc = std.os.linux.CLONE.NEWIPC,
+    uts = std.os.linux.CLONE.NEWUTS,
+    mount = std.os.linux.CLONE.NEWNS,
 };
 
 pub fn setupNamespace(namespace: Namespace, config: []runtime_spec.LinuxNamespace) !void {
